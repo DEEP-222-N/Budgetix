@@ -9,6 +9,7 @@ import LandingPage from './components/LandingPage';
 import Signup from './components/Signup';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CurrencyProvider } from './context/CurrencyContext';
+import { BudgetProvider } from './context/BudgetContext';
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -55,9 +56,11 @@ function AppContent() {
 function App() {
   return (
     <AuthProvider>
-      <CurrencyProvider>
-        <AppContent />
-      </CurrencyProvider>
+      <BudgetProvider>
+        <CurrencyProvider>
+          <AppContent />
+        </CurrencyProvider>
+      </BudgetProvider>
     </AuthProvider>
   );
 }

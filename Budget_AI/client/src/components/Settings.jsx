@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Target, Bell, Palette, Shield, Save, DollarSign, Percent, Calendar } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
+import { useBudget } from '../context/BudgetContext';
 
 const allCategories = [
   'Food',
@@ -21,8 +22,8 @@ const allCategories = [
 const Settings = () => {
   const { user, supabase } = useAuth();
   const { currency, setCurrency, symbol } = useCurrency();
+  const { monthlyBudget, setMonthlyBudget } = useBudget();
   const [settings, setSettings] = useState({
-    monthlyBudget: 2500,
     budgetAlerts: true,
     overspendingAlert: 90,
     weeklyReports: true,
@@ -123,14 +124,18 @@ const Settings = () => {
                 Monthly Budget Goal
               </label>
               <div className="relative">
-                <DollarSign className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                <span className="absolute left-4 top-3 text-gray-500 font-medium">{symbol}</span>
                 <input
                   type="number"
-                  value={settings.monthlyBudget}
-                  onChange={(e) => handleSettingChange('monthlyBudget', Number(e.target.value))}
+                  value={monthlyBudget}
+                  onChange={(e) => setMonthlyBudget(Number(e.target.value))}
                   className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  min={0}
                 />
               </div>
+              <p className="text-sm text-gray-500 mt-1">
+                Set your total spending goal for the month.
+              </p>
             </div>
 
             <div>
