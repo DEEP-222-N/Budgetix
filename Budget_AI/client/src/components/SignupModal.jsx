@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 
+
 const SignupModal = ({ isOpen, onClose }) => {
   const { signup } = useAuth();
   const [formData, setFormData] = useState({

@@ -1,7 +1,9 @@
 import React from 'react';
 import { TrendingUp, AlertTriangle } from 'lucide-react';
+import { useCurrency } from '../context/CurrencyContext';
 
 const BudgetProgress = ({ spent, budget }) => {
+  const { symbol } = useCurrency();
   const percentage = (spent / budget) * 100;
   const isOverBudget = percentage > 100;
   const remaining = budget - spent;
@@ -24,8 +26,8 @@ const BudgetProgress = ({ spent, budget }) => {
       
       <div className="space-y-4">
         <div className="flex justify-between text-sm">
-          <span className="text-gray-600">Spent: ${spent.toLocaleString()}</span>
-          <span className="text-gray-600">Budget: ${budget.toLocaleString()}</span>
+          <span className="text-gray-600">Spent: {symbol}{spent.toLocaleString()}</span>
+          <span className="text-gray-600">Budget: {symbol}{budget.toLocaleString()}</span>
         </div>
         
         <div className="w-full bg-gray-200 rounded-full h-3">
@@ -42,7 +44,7 @@ const BudgetProgress = ({ spent, budget }) => {
         <div className="flex justify-between items-center">
           <span className="text-sm text-gray-600">{percentage.toFixed(1)}% used</span>
           <span className={`text-sm font-medium ${remaining >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            ${Math.abs(remaining).toLocaleString()} {remaining >= 0 ? 'remaining' : 'over budget'}
+            {symbol}{Math.abs(remaining).toLocaleString()} {remaining >= 0 ? 'remaining' : 'over budget'}
           </span>
         </div>
       </div>
