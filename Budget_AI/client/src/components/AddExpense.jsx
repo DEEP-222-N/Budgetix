@@ -8,10 +8,10 @@ const AddExpense = () => {
 
   const [formData, setFormData] = useState({
     amount: '',
-    category: 'Food',
+    category: '',
     description: '',
     date: new Date().toISOString().split('T')[0],
-    paymentMethod: 'Credit Card'
+    paymentMethod: ''
   });
   const [showSuccess, setShowSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -167,6 +167,7 @@ const AddExpense = () => {
             onChange={handleChange}
             required
           >
+            <option value="" disabled>Select Category</option>
             {categories.map((category) => (
               <option key={category} value={category}>
                 {category}
@@ -186,6 +187,7 @@ const AddExpense = () => {
             onChange={handleChange}
             required
           >
+            <option value="" disabled>Select Payment Method</option>
             {paymentMethods.map((method) => (
               <option key={method} value={method}>
                 {method}

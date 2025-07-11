@@ -6,7 +6,9 @@ import Upload from './components/Upload';
 import AddExpense from './components/AddExpense';
 import Settings from './components/Settings';
 import LandingPage from './components/LandingPage';
+import Signup from './components/Signup';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { CurrencyProvider } from './context/CurrencyContext';
 
 function AppContent() {
   const { user, loading } = useAuth();
@@ -22,7 +24,14 @@ function AppContent() {
 
   // If not logged in, show landing page
   if (!user) {
-    return <LandingPage />;
+    return (
+      <Router>
+        <Routes>
+          <Route path="/signup" element={<Signup />} />
+          <Route path="*" element={<LandingPage />} />
+        </Routes>
+      </Router>
+    );
   }
 
   return (
@@ -46,7 +55,9 @@ function AppContent() {
 function App() {
   return (
     <AuthProvider>
-      <AppContent />
+      <CurrencyProvider>
+        <AppContent />
+      </CurrencyProvider>
     </AuthProvider>
   );
 }

@@ -13,17 +13,23 @@ const Navigation = () => {
   // Get user from AuthContext
   const { user, logout } = useAuth();
   const userEmail = user?.email || 'user@example.com';
-  
-  // Extract username from email and remove numeric characters
-  const username = userEmail.split('@')[0].replace(/[0-9]/g, '');
-  
-  // Format username for display (capitalize first letter)
-  const displayName = username.charAt(0).toUpperCase() + username.slice(1);
-  
+
+  // Prefer username from user_metadata if available
+  const usernameFromMetadata = user?.user_metadata?.username;
+  let displayName = '';
+  if (usernameFromMetadata && usernameFromMetadata.trim() !== '') {
+    displayName = usernameFromMetadata;
+  } else {
+    // Extract username from email and remove numeric characters
+    const username = userEmail.split('@')[0].replace(/[0-9]/g, '');
+    // Format username for display (capitalize first letter)
+    displayName = username.charAt(0).toUpperCase() + username.slice(1);
+  }
+
   // Get first letter for avatar
   const userInitial = displayName.charAt(0).toUpperCase();
-  
-  // Display greeting with name (without numerics)
+
+  // Display greeting with name
   const greeting = `Hi ${displayName}`;
 
   const navItems = [

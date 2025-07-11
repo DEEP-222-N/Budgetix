@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Brain, PieChart, Wallet, TrendingUp, ChevronRight, ShieldCheck, ArrowRight } from 'lucide-react';
 import budgetixLogo from '../assets/image-removebg-preview (4).png';
 import { useAuth } from '../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 
 // Background image URL - blue ballpoint pen on paper beside calculator
 const bgImageUrl = 'https://images.unsplash.com/photo-1450101499163-c8848c66ca85?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1740&q=80';
@@ -14,6 +15,7 @@ const LandingPage = () => {
   const [loading, setLoading] = useState(false);
   const [activeFeature, setActiveFeature] = useState(0);
   const [isVisible, setIsVisible] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
     setIsVisible(true);
@@ -202,41 +204,34 @@ const LandingPage = () => {
                 
                 <button
                   type="submit"
-                  className="w-full bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white py-3 rounded-lg font-semibold text-lg transition shadow-lg flex items-center justify-center"
+                  className="w-full bg-blue-500 text-white py-3 rounded-lg font-semibold hover:bg-blue-600 transition mb-4"
                   disabled={loading}
                 >
-                  {loading ? (
-                    <svg className="animate-spin h-5 w-5 mr-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                  ) : (
-                    <>
-                      Login <ArrowRight className="ml-2 h-5 w-5" />
-                    </>
-                  )}
+                  {loading ? 'Logging in...' : 'Log In'}
                 </button>
                 
-                <div className="mt-6 text-center">
-                  <p className="text-blue-100">
-                    Don't have an account?{' '}
-                    <a href="#" className="text-blue-300 hover:text-blue-200 font-medium">
-                      Sign up
-                    </a>
-                  </p>
+                <div className="text-center mt-4">
+                  <span className="text-blue-100">Don't have an account?</span>
+                  <button
+                    onClick={() => navigate('/signup')}
+                    className="ml-2 text-blue-400 hover:underline font-semibold"
+                    type="button"
+                  >
+                    Sign Up
+                  </button>
                 </div>
               </form>
-            </div>
-            
-            {/* Trust indicators */}
-            <div className="mt-8 flex items-center justify-center space-x-6">
-              <div className="flex items-center">
-                <ShieldCheck className="h-5 w-5 text-blue-300 mr-2" />
-                <span className="text-sm text-blue-200">Secure Login</span>
-              </div>
-              <div className="flex items-center">
-                <ShieldCheck className="h-5 w-5 text-blue-300 mr-2" />
-                <span className="text-sm text-blue-200">Data Protection</span>
+              
+              {/* Trust indicators */}
+              <div className="mt-8 flex items-center justify-center space-x-6">
+                <div className="flex items-center">
+                  <ShieldCheck className="h-5 w-5 text-blue-300 mr-2" />
+                  <span className="text-sm text-blue-200">Secure Login</span>
+                </div>
+                <div className="flex items-center">
+                  <ShieldCheck className="h-5 w-5 text-blue-300 mr-2" />
+                  <span className="text-sm text-blue-200">Data Protection</span>
+                </div>
               </div>
             </div>
           </div>

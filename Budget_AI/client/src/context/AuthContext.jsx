@@ -2,9 +2,10 @@ import React, { createContext, useState, useEffect, useContext } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
 // Direct Supabase connection
+// Uses environment variables from .env (REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY)
 const supabase = createClient(
-  'https://agchhwydoccsdnwuqwtq.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFnY2hod3lkb2Njc2Rud3Vxd3RxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NDIyMzk2NCwiZXhwIjoyMDU5Nzk5OTY0fQ.nCLX75cAcCfz-VhD1P5R2nzOBjiMusHDbrOYV5zg-c0'
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
 const AuthContext = createContext();
@@ -26,7 +27,7 @@ export function AuthProvider({ children }) {
     // Set up auth state change listener
     const { data: authListener } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        console.log('Auth state changed:', event, session);
+        // console.log('Auth state changed:', event, session); // Remove noisy logs
         setUser(session?.user || null);
         setLoading(false);
       }

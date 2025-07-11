@@ -1,7 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Target, Bell, Palette, Shield, Save, DollarSign, Percent, Calendar } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { useCurrency } from '../context/CurrencyContext';
+
+const allCategories = [
+  'Food',
+  'Transportation',
+  'Entertainment',
+  'Housing',
+  'Utilities',
+  'Healthcare',
+  'Education',
+  'Shopping',
+  'Personal Care',
+  'Travel',
+  'Gifts',
+  'Other'
+];
 
 const Settings = () => {
+  const { user, supabase } = useAuth();
+  const { currency, setCurrency, symbol } = useCurrency();
   const [settings, setSettings] = useState({
     monthlyBudget: 2500,
     budgetAlerts: true,
@@ -15,30 +34,59 @@ const Settings = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
-  const budgetCategories = [
-    { name: 'Food & Dining', budget: 600, current: 450 },
-    { name: 'Transportation', budget: 300, current: 120 },
-    { name: 'Entertainment', budget: 200, current: 80 },
-    { name: 'Utilities', budget: 250, current: 200 },
-    { name: 'Healthcare', budget: 150, current: 150 },
-    { name: 'Shopping', budget: 300, current: 100 },
-    { name: 'Other', budget: 200, current: 50 }
-  ];
+  // Initialize all categories with default budgets and 0 spent
+  const [categoryBudgets, setCategoryBudgets] = useState(
+    allCategories.map(name => ({ name, budget: 200, current: 0 }))
+  );
+
+  useEffect(() => {
+    // Fetch expenses for the user and aggregate spent per category
+    const fetchCategorySpending = async () => {
+      if (!user || !supabase) return;
+      const { data, error } = await supabase
+        .from('expenses')
+        .select('category, amount')
+        .eq('user_id', user.id);
+      if (error) return;
+      // Aggregate spent per category
+      const spentMap = {};
+      data.forEach(exp => {
+        if (!spentMap[exp.category]) spentMap[exp.category] = 0;
+        spentMap[exp.category] += Number(exp.amount) || 0;
+      });
+      setCategoryBudgets(prev =>
+        prev.map(cat => ({
+          ...cat,
+          current: spentMap[cat.name] || 0
+        }))
+      );
+    };
+    fetchCategorySpending();
+  }, [user, supabase]);
 
   const handleSettingChange = (key, value) => {
     setSettings(prev => ({
       ...prev,
       [key]: value
     }));
+    if (key === 'currency') {
+      setCurrency(value);
+    }
+  };
+
+  // Update category budget in state
+  const handleCategoryBudgetChange = (index, value) => {
+    setCategoryBudgets(prev => prev.map((cat, i) =>
+      i === index ? { ...cat, budget: Number(value) } : cat
+    ));
   };
 
   const handleSave = () => {
     setIsSaving(true);
-    
+    // Here you could also persist categoryBudgets if needed
     setTimeout(() => {
       setIsSaving(false);
       setShowSuccess(true);
-      
       setTimeout(() => {
         setShowSuccess(false);
       }, 3000);
@@ -108,7 +156,7 @@ const Settings = () => {
                 Currency
               </label>
               <select
-                value={settings.currency}
+                value={currency}
                 onChange={(e) => handleSettingChange('currency', e.target.value)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
@@ -116,6 +164,8 @@ const Settings = () => {
                 <option value="EUR">EUR (€)</option>
                 <option value="GBP">GBP (£)</option>
                 <option value="JPY">JPY (¥)</option>
+                <option value="CAD">CAD (C$)</option>
+                <option value="INR">INR (₹)</option>
               </select>
             </div>
           </div>
@@ -188,30 +238,36 @@ const Settings = () => {
         </div>
         
         <div className="space-y-4">
-          {budgetCategories.map((category) => (
-            <div key={category.name} className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-              <div className="flex-1">
-                <p className="font-medium text-gray-900">{category.name}</p>
-                <div className="flex items-center space-x-4 mt-2">
-                  <div className="flex-1 bg-gray-200 rounded-full h-2">
-                    <div 
-                      className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${(category.current / category.budget) * 100}%` }}
-                    />
+          {categoryBudgets.map((category, idx) => {
+            const isOverBudget = category.current > category.budget;
+            return (
+              <div
+                key={category.name}
+                className={`flex items-center justify-between p-4 bg-gray-50 rounded-lg ${isOverBudget ? 'border border-red-500' : ''}`}
+              >
+                <div className="flex-1">
+                  <p className="font-medium text-gray-900">{category.name}</p>
+                  <div className="flex items-center space-x-4 mt-2">
+                    <div className="flex-1 bg-gray-200 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-300 ${isOverBudget ? 'bg-gradient-to-r from-red-500 to-red-600' : 'bg-gradient-to-r from-blue-500 to-purple-600'}`}
+                        style={{ width: `${category.budget > 0 ? Math.min((category.current / category.budget) * 100, 100) : 0}%` }}
+                      />
+                    </div>
+                    <span className={`text-sm ${isOverBudget ? 'text-red-600 font-semibold' : 'text-gray-600'}`}>
+                      {symbol}{category.current} / {symbol}{category.budget}
+                    </span>
                   </div>
-                  <span className="text-sm text-gray-600">
-                    ${category.current} / ${category.budget}
-                  </span>
                 </div>
+                <input
+                  type="number"
+                  value={category.budget}
+                  className="w-20 px-2 py-1 border border-gray-300 rounded text-sm ml-4"
+                  onChange={e => handleCategoryBudgetChange(idx, e.target.value)}
+                />
               </div>
-              <input
-                type="number"
-                value={category.budget}
-                className="w-20 px-2 py-1 border border-gray-300 rounded text-sm ml-4"
-                onChange={() => {}} // Handle budget change
-              />
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
