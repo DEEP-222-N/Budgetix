@@ -10,7 +10,7 @@ import { useBudget } from '../context/BudgetContext';
 
 const Dashboard = () => {
   const { user } = useAuth();
-  const { monthlyBudget } = useBudget();
+  const { monthlyBudget, loading: budgetLoading } = useBudget();
   const [aiRecommendations] = useState([
     "Consider reducing dining out expenses by 20% to save $90/month",
     "Switch to a more fuel-efficient commute to save $40/month",
@@ -121,8 +121,8 @@ const Dashboard = () => {
   const totalSpent = React.useMemo(() => {
     return filteredExpensesForGraphs.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
   }, [filteredExpensesForGraphs]);
-  const remaining = monthlyBudget - totalSpent;
-  const budgetUsage = monthlyBudget > 0 ? (totalSpent / monthlyBudget) * 100 : 0;
+  const remaining = monthlyBudget ? monthlyBudget - totalSpent : 0;
+  const budgetUsage = monthlyBudget && monthlyBudget > 0 ? (totalSpent / monthlyBudget) * 100 : 0;
 
   // TODO: If you want to show charts based on real expenses, fetch and process them in a higher-level component or context.
   // For now, only the ExpensesList below will show real user expenses.
@@ -202,7 +202,16 @@ const Dashboard = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Monthly Budget</p>
-              <p className="text-2xl font-bold text-gray-900">{symbol}{monthlyBudget.toLocaleString()}</p>
+              {budgetLoading ? (
+                <div className="flex items-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div>
+                  <span className="text-gray-500">Loading...</span>
+                </div>
+              ) : (
+                <p className="text-2xl font-bold text-gray-900">
+                  {monthlyBudget !== null ? `${symbol}${monthlyBudget.toLocaleString()}` : "--"}
+                </p>
+              )}
             </div>
             <div className="bg-purple-100 p-3 rounded-full">
               <Target className="h-6 w-6 text-purple-600" />
@@ -224,7 +233,7 @@ const Dashboard = () => {
       </div>
 
       {/* Budget Progress */}
-      <BudgetProgress spent={totalSpent} budget={monthlyBudget} />
+      <BudgetProgress spent={totalSpent} budget={monthlyBudget || 0} />
 
       {/* Charts Parent with Dropdowns */}
       <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 mb-8">

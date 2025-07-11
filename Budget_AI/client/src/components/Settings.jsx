@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Target, Bell, Palette, Shield, Save, DollarSign, Percent, Calendar } from 'lucide-react';
+import { Target, Bell, Palette, Shield, Save, DollarSign, Percent, Calendar, AlertCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { useBudget } from '../context/BudgetContext';
@@ -34,6 +34,8 @@ const Settings = () => {
 
   const [isSaving, setIsSaving] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   // Initialize all categories with default budgets and 0 spent
   const [categoryBudgets, setCategoryBudgets] = useState(
@@ -41,29 +43,77 @@ const Settings = () => {
   );
 
   useEffect(() => {
-    // Fetch expenses for the user and aggregate spent per category
-    const fetchCategorySpending = async () => {
+    // Fetch user's budget data and expenses
+    const fetchUserBudgetData = async () => {
       if (!user || !supabase) return;
-      const { data, error } = await supabase
-        .from('expenses')
-        .select('category, amount')
-        .eq('user_id', user.id);
-      if (error) return;
-      // Aggregate spent per category
-      const spentMap = {};
-      data.forEach(exp => {
-        if (!spentMap[exp.category]) spentMap[exp.category] = 0;
-        spentMap[exp.category] += Number(exp.amount) || 0;
-      });
-      setCategoryBudgets(prev =>
-        prev.map(cat => ({
-          ...cat,
-          current: spentMap[cat.name] || 0
-        }))
-      );
+      setLoading(true);
+      setError(null);
+      
+      try {
+        // Fetch budget limits from the budgets table
+        const { data: budgetData, error: budgetError } = await supabase
+          .from('budgets')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+          
+        if (budgetError && budgetError.code !== 'PGRST116') { // PGRST116 is the "no rows returned" error
+          console.error('Error fetching budget data:', budgetError);
+          setError('Failed to load budget data');
+        }
+        
+        // Fetch expenses for the user and aggregate spent per category
+        const { data: expenseData, error: expenseError } = await supabase
+          .from('expenses')
+          .select('category, amount')
+          .eq('user_id', user.id);
+          
+        if (expenseError) {
+          console.error('Error fetching expenses:', expenseError);
+          setError('Failed to load expense data');
+          return;
+        }
+        
+        // Aggregate spent per category
+        const spentMap = {};
+        expenseData.forEach(exp => {
+          if (!spentMap[exp.category]) spentMap[exp.category] = 0;
+          spentMap[exp.category] += Number(exp.amount) || 0;
+        });
+        
+        // Update category budgets with data from the database
+        if (budgetData) {
+          // Update monthly budget from the database
+          setMonthlyBudget(budgetData.monthly_budget_total);
+          
+          // Update category budgets with values from the database
+          setCategoryBudgets(allCategories.map(name => {
+            const dbName = name.toLowerCase().replace(' ', '_');
+            return {
+              name,
+              budget: budgetData[dbName] || 200, // Default to 200 if not set
+              current: spentMap[name] || 0
+            };
+          }));
+        } else {
+          // No budget data found, just update the spending amounts
+          setCategoryBudgets(prev =>
+            prev.map(cat => ({
+              ...cat,
+              current: spentMap[cat.name] || 0
+            }))
+          );
+        }
+      } catch (err) {
+        console.error('Unexpected error:', err);
+        setError('An unexpected error occurred');
+      } finally {
+        setLoading(false);
+      }
     };
-    fetchCategorySpending();
-  }, [user, supabase]);
+    
+    fetchUserBudgetData();
+  }, [user, supabase, setMonthlyBudget]);
 
   const handleSettingChange = (key, value) => {
     setSettings(prev => ({
@@ -82,16 +132,46 @@ const Settings = () => {
     ));
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    if (!user || !supabase) return;
+    
     setIsSaving(true);
-    // Here you could also persist categoryBudgets if needed
-    setTimeout(() => {
-      setIsSaving(false);
+    setError(null);
+    
+    try {
+      // Convert category budgets to database format
+      const budgetData = {};
+      categoryBudgets.forEach(cat => {
+        const dbName = cat.name.toLowerCase().replace(' ', '_');
+        budgetData[dbName] = Number(cat.budget) || 0;
+      });
+      
+      // Add monthly budget total
+      budgetData.monthly_budget_total = Number(monthlyBudget) || 0;
+      budgetData.user_id = user.id;
+      budgetData.updated_at = new Date().toISOString();
+      
+      // Upsert budget data (insert if not exists, update if exists)
+      const { error: upsertError } = await supabase
+        .from('budgets')
+        .upsert(budgetData, { onConflict: 'user_id' });
+        
+      if (upsertError) {
+        console.error('Error saving budget data:', upsertError);
+        setError('Failed to save budget data');
+        return;
+      }
+      
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);
       }, 3000);
-    }, 1000);
+    } catch (err) {
+      console.error('Unexpected error saving budget data:', err);
+      setError('An unexpected error occurred while saving');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -106,6 +186,24 @@ const Settings = () => {
           <div className="flex items-center space-x-2">
             <Save className="h-5 w-5 text-green-600" />
             <p className="text-green-800 font-medium">Settings saved successfully!</p>
+          </div>
+        </div>
+      )}
+      
+      {error && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center space-x-2">
+            <AlertCircle className="h-5 w-5 text-red-600" />
+            <p className="text-red-800 font-medium">{error}</p>
+          </div>
+        </div>
+      )}
+      
+      {loading && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-center space-x-2">
+            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+            <p className="text-blue-800 font-medium">Loading your budget data...</p>
           </div>
         </div>
       )}
