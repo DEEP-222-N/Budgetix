@@ -6,10 +6,11 @@ import BudgetProgress from './BudgetProgress';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { useCurrency } from '../context/CurrencyContext';
+import { useBudget } from '../context/BudgetContext';
 
 const Dashboard = () => {
   const { user } = useAuth();
-  const [monthlyBudget] = useState(2500);
+  const { monthlyBudget } = useBudget();
   const [aiRecommendations] = useState([
     "Consider reducing dining out expenses by 20% to save $90/month",
     "Switch to a more fuel-efficient commute to save $40/month",
