@@ -73,6 +73,22 @@ const AllExpenses = () => {
     }
   }
 
+  // Check if all data is loaded (after all hooks)
+  const isDataLoaded = !expensesLoading && user;
+
+  // Show loading screen until all data is ready
+  if (!isDataLoaded) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-gray-700 mb-2">Loading Expenses</h2>
+          <p className="text-gray-500">Please wait while we fetch your expense data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-4xl mx-auto py-8 px-4">
       <button
@@ -90,9 +106,7 @@ const AllExpenses = () => {
         onChange={e => setSearchTerm(e.target.value)}
       />
       <div className="space-y-3">
-        {expensesLoading ? (
-          <div className="text-center py-8 text-gray-500">Loading expenses...</div>
-        ) : expensesError ? (
+        {expensesError ? (
           <div className="text-center py-8 text-red-500">{expensesError}</div>
         ) : filteredExpenses(expenses, searchTerm).length === 0 ? (
           <div className="text-center py-8 text-gray-500">

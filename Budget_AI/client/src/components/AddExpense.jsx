@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './AddExpense.css';
 import { useAuth } from '../context/AuthContext';
-import { Upload as UploadIcon, FileText, CheckCircle, AlertCircle, Brain } from 'lucide-react';
+import { Upload as UploadIcon, FileText, CheckCircle, AlertCircle, Brain, X } from 'lucide-react';
 
 
 const AddExpense = () => {
@@ -25,6 +25,26 @@ const AddExpense = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processedData, setProcessedData] = useState(null);
   const [showUploadSection, setShowUploadSection] = useState(false);
+
+  // Toast logic
+  const [showError, setShowError] = useState(false);
+  const [showSuccessToast, setShowSuccessToast] = useState(false);
+
+  React.useEffect(() => {
+    if (showSuccess) {
+      setShowSuccessToast(true);
+      const timer = setTimeout(() => setShowSuccessToast(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [showSuccess]);
+
+  React.useEffect(() => {
+    if (error) {
+      setShowError(true);
+      const timer = setTimeout(() => setShowError(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   const categories = [
     'Food',
@@ -168,20 +188,35 @@ const AddExpense = () => {
 
   return (
     <div className="add-expense-container">
+      {/* Toast Notifications */}
+      <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-50 w-full flex justify-center pointer-events-none">
+        <div className="w-full max-w-md">
+          {showSuccessToast && (
+            <div className="flex items-center justify-between bg-green-50 border border-green-200 text-green-800 rounded-lg p-4 shadow-lg mb-4 animate-fade-in pointer-events-auto transition-all duration-300">
+              <div className="flex items-center space-x-2">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                <span className="font-medium">Transaction added successfully!</span>
+              </div>
+              <button onClick={() => setShowSuccessToast(false)} className="ml-4 text-green-700 hover:text-green-900 focus:outline-none">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          )}
+          {showError && error && (
+            <div className="flex items-center justify-between bg-red-50 border border-red-200 text-red-800 rounded-lg p-4 shadow-lg mb-4 animate-fade-in pointer-events-auto transition-all duration-300">
+              <div className="flex items-center space-x-2">
+                <AlertCircle className="h-5 w-5 text-red-600" />
+                <span className="font-medium">{error}</span>
+              </div>
+              <button onClick={() => setShowError(false)} className="ml-4 text-red-700 hover:text-red-900 focus:outline-none">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
       <h1>Add New Expense</h1>
       <p className="subtitle">Track your spending by adding manual expense entries</p>
-      
-      {error && (
-        <div className="error-message">
-          <i className="fas fa-exclamation-circle"></i> {error}
-        </div>
-      )}
-      
-      {showSuccess && (
-        <div className="success-message">
-          <i className="fas fa-check-circle"></i> Transaction added successfully!
-        </div>
-      )}
       
       <form onSubmit={handleSubmit} className="expense-form">
         <div className="form-group">

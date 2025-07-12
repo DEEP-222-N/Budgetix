@@ -44,7 +44,7 @@ const Dashboard = () => {
         .from('expenses')
         .select('*')
         .eq('user_id', user.id)
-        .order('date', { ascending: false })
+        .order('created_at', { ascending: false })
         .limit(10);
       if (error) {
         console.error('Supabase error:', error);
@@ -167,6 +167,22 @@ const Dashboard = () => {
     }
   }
 
+  // Check if all data is loaded (after all hooks)
+  const isDataLoaded = !expensesLoading && !budgetLoading && user;
+
+  // Show loading screen until all data is ready
+  if (!isDataLoaded) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-gray-700 mb-2">Loading Dashboard</h2>
+          <p className="text-gray-500">Please wait while we fetch your financial data...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
       <div className="text-center">
@@ -204,16 +220,9 @@ const Dashboard = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Monthly Budget</p>
-              {budgetLoading ? (
-                <div className="flex items-center space-x-2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600"></div>
-                  <span className="text-gray-500">Loading...</span>
-                </div>
-              ) : (
-                <p className="text-2xl font-bold text-gray-900">
-                  {monthlyBudget !== null ? `${symbol}${monthlyBudget.toLocaleString()}` : "--"}
-                </p>
-              )}
+              <p className="text-2xl font-bold text-gray-900">
+                {monthlyBudget !== null ? `${symbol}${monthlyBudget.toLocaleString()}` : "--"}
+              </p>
             </div>
             <div className="bg-purple-100 p-3 rounded-full">
               <Target className="h-6 w-6 text-purple-600" />
@@ -341,9 +350,7 @@ const Dashboard = () => {
       <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
         <h3 className="text-lg font-semibold mb-4">Recent Expenses</h3>
         <div className="space-y-3">
-          {expensesLoading ? (
-            <div className="text-center py-8 text-gray-500">Loading expenses...</div>
-          ) : expensesError ? (
+          {expensesError ? (
             <div className="text-center py-8 text-red-500">{expensesError}</div>
           ) : expenses.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
@@ -351,7 +358,7 @@ const Dashboard = () => {
               <p className="text-sm">Add your first expense to see it here!</p>
             </div>
           ) : (
-            [...expenses].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5).map((expense) => (
+            expenses.slice(0, 5).map((expense) => (
               <ExpenseCard key={expense.id} expense={expense} />
             ))
           )}
