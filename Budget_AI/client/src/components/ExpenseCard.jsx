@@ -7,10 +7,17 @@ const ExpenseCard = ({ expense }) => {
   const getCategoryColor = (category) => {
     const colors = {
       Food: 'bg-green-100 text-green-800',
-      Transport: 'bg-blue-100 text-blue-800',
+      Grocery: 'bg-yellow-100 text-yellow-800',
+      Education: 'bg-blue-100 text-blue-800',
+      'Transportation and Fuel': 'bg-cyan-100 text-cyan-800',
       Entertainment: 'bg-purple-100 text-purple-800',
+      Housing: 'bg-pink-100 text-pink-800',
       Utilities: 'bg-orange-100 text-orange-800',
       Healthcare: 'bg-red-100 text-red-800',
+      Shopping: 'bg-indigo-100 text-indigo-800',
+      'Personal Care': 'bg-teal-100 text-teal-800',
+      Travel: 'bg-fuchsia-100 text-fuchsia-800',
+      Other: 'bg-gray-200 text-gray-800',
       default: 'bg-gray-100 text-gray-800'
     };
     return colors[category] || colors.default;

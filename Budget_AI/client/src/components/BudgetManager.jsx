@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Target, Percent, Calendar, AlertCircle, Save } from 'lucide-react';
+import { Target, Percent, Calendar, AlertCircle, Save, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { useBudget } from '../context/BudgetContext';
@@ -41,6 +41,30 @@ const BudgetManager = () => {
   );
   // Add a state for the monthly budget input string (for UI only)
   const [monthlyBudgetInput, setMonthlyBudgetInput] = useState(undefined);
+  const [monthlySavingsGoal, setMonthlySavingsGoal] = useState('');
+  const [monthlyInvestmentGoal, setMonthlyInvestmentGoal] = useState('');
+  const [achievableGoal, setAchievableGoal] = useState('');
+  const [monthsToAchieveGoal, setMonthsToAchieveGoal] = useState('');
+
+  // Alert dismiss logic
+  const [showError, setShowError] = useState(false);
+  const [showSuccessAlert, setShowSuccessAlert] = useState(false);
+
+  useEffect(() => {
+    if (showSuccess) {
+      setShowSuccessAlert(true);
+      const timer = setTimeout(() => setShowSuccessAlert(false), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [showSuccess]);
+
+  useEffect(() => {
+    if (error) {
+      setShowError(true);
+      const timer = setTimeout(() => setShowError(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   // When loading the monthly budget, reset the input string to undefined
   useEffect(() => {
@@ -141,6 +165,11 @@ const BudgetManager = () => {
   };
   const handleSave = async () => {
     if (!user || !supabase) return;
+    // Validation: If achievableGoal is filled, monthsToAchieveGoal must be filled
+    if (achievableGoal && !monthsToAchieveGoal) {
+      setError('Please enter the number of months to achieve your goal.');
+      return;
+    }
     setIsSaving(true);
     setError(null);
     try {
@@ -152,6 +181,11 @@ const BudgetManager = () => {
       budgetData.monthly_budget_total = Number(monthlyBudget) || 0;
       budgetData.user_id = user.id;
       budgetData.updated_at = new Date().toISOString();
+      // Add new fields with logic
+      budgetData.monthly_investment_goal = monthlyInvestmentGoal ? Number(monthlyInvestmentGoal) : 0;
+      budgetData.monthly_savings_goal = monthlySavingsGoal ? Number(monthlySavingsGoal) : 0;
+      budgetData.achievable_goal = achievableGoal || null;
+      budgetData.months_to_achieve_goal = monthsToAchieveGoal ? Number(monthsToAchieveGoal) : (achievableGoal ? null : 0);
       const { error: upsertError } = await supabase
         .from('budgets')
         .upsert(budgetData, { onConflict: 'user_id' });
@@ -167,6 +201,22 @@ const BudgetManager = () => {
       setIsSaving(false);
     }
   };
+
+  // Check if all data is loaded (after all hooks)
+  const isDataLoaded = !loading && user;
+
+  // Show loading screen until all data is ready
+  if (!isDataLoaded) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-purple-600 mx-auto mb-4"></div>
+          <h2 className="text-xl font-semibold text-gray-700 mb-2">Loading Budget Manager</h2>
+          <p className="text-gray-500">Please wait while we fetch your budget data...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -186,81 +236,132 @@ const BudgetManager = () => {
           placeholder="Type your request or question for the AI assistant..."
         />
       </div>
-      {showSuccess && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="flex items-center space-x-2">
-            <Save className="h-5 w-5 text-green-600" />
-            <p className="text-green-800 font-medium">Settings saved successfully!</p>
-          </div>
+      {/* Toast Notifications */}
+      <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-50 w-full flex justify-center pointer-events-none">
+        <div className="w-full max-w-md">
+          {showSuccessAlert && (
+            <div className="flex items-center justify-between bg-green-50 border border-green-200 text-green-800 rounded-lg p-4 shadow-lg mb-4 animate-fade-in pointer-events-auto transition-all duration-300">
+              <div className="flex items-center space-x-2">
+                <Save className="h-5 w-5 text-green-600" />
+                <span className="font-medium">Settings saved successfully!</span>
+              </div>
+              <button onClick={() => setShowSuccessAlert(false)} className="ml-4 text-green-700 hover:text-green-900 focus:outline-none">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          )}
+          {showError && error && (
+            <div className="flex items-center justify-between bg-red-50 border border-red-200 text-red-800 rounded-lg p-4 shadow-lg mb-4 animate-fade-in pointer-events-auto transition-all duration-300">
+              <div className="flex items-center space-x-2">
+                <AlertCircle className="h-5 w-5 text-red-600" />
+                <span className="font-medium">{error}</span>
+              </div>
+              <button onClick={() => setShowError(false)} className="ml-4 text-red-700 hover:text-red-900 focus:outline-none">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          )}
         </div>
-      )}
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <div className="flex items-center space-x-2">
-            <AlertCircle className="h-5 w-5 text-red-600" />
-            <p className="text-red-800 font-medium">{error}</p>
-          </div>
-        </div>
-      )}
-      {loading && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-center space-x-2">
-            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-            <p className="text-blue-800 font-medium">Loading your budget data...</p>
-          </div>
-        </div>
-      )}
+      </div>
       {/* Budget Settings */}
-      <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 w-full mb-8">
-        <div className="flex items-center space-x-2 mb-6">
-          <Target className="h-6 w-6 text-blue-600" />
-          <h3 className="text-lg font-semibold">Budget Settings</h3>
+      <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-200 w-full mb-8">
+        <div className="flex items-center space-x-3 mb-8">
+          <Target className="h-7 w-7 text-blue-600" />
+          <h3 className="text-2xl font-extrabold text-gray-900 tracking-tight">Budget Settings</h3>
         </div>
-        <div className="space-y-6">
-          {/* Currency at the top */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Currency</label>
-            <select
-              value={currency}
-              onChange={(e) => handleSettingChange('currency', e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="USD">USD ($)</option>
-              <option value="EUR">EUR (€)</option>
-              <option value="GBP">GBP (£)</option>
-              <option value="JPY">JPY (¥)</option>
-              <option value="CAD">CAD (C$)</option>
-              <option value="INR">INR (₹)</option>
-            </select>
+        <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-16 gap-y-10 md:items-start md:justify-center">
+          {/* Left Column */}
+          <div className="flex-1 min-w-0 space-y-8 md:pr-8 md:px-2">
+            {/* Currency */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Currency</label>
+              <select
+                value={currency}
+                onChange={(e) => handleSettingChange('currency', e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 hover:border-blue-400 transition"
+              >
+                <option value="USD">USD ($)</option>
+                <option value="EUR">EUR (€)</option>
+                <option value="GBP">GBP (£)</option>
+                <option value="JPY">JPY (¥)</option>
+                <option value="CAD">CAD (C$)</option>
+                <option value="INR">INR (₹)</option>
+              </select>
+              <p className="text-xs text-gray-500 mt-1">Choose the currency you want to use for your budget.</p>
+            </div>
+            {/* Monthly Budget Goal */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Monthly Budget Goal</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">{symbol}</span>
+                <input
+                  type="text"
+                  value={monthlyBudgetInput !== undefined ? monthlyBudgetInput : (monthlyBudget === 0 ? '' : monthlyBudget)}
+                  onChange={e => handleMonthlyBudgetInputChange(e.target.value)}
+                  onBlur={handleMonthlyBudgetInputBlur}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 hover:border-blue-400 transition align-middle"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">Set your total spending goal for the month.</p>
+            </div>
+            {/* Monthly Savings Goal */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Monthly Savings Goal</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">{symbol}</span>
+                <input
+                  type="number"
+                  value={monthlySavingsGoal}
+                  onChange={e => setMonthlySavingsGoal(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50 hover:border-green-400 transition align-middle"
+                  placeholder="Enter your savings goal"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">How much do you want to save this month?</p>
+            </div>
           </div>
-          {/* Monthly Budget Goal */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Monthly Budget Goal</label>
-            <div className="relative">
-              <span className="absolute left-4 top-3 text-gray-500 font-medium">{symbol}</span>
+          {/* Right Column */}
+          <div className="flex-1 min-w-0 space-y-8 md:pl-8 md:px-2 pt-8 md:pt-0">
+            {/* Monthly Investment Goal */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Monthly Investment Goal</label>
+              <div className="relative">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">{symbol}</span>
+                <input
+                  type="number"
+                  value={monthlyInvestmentGoal}
+                  onChange={e => setMonthlyInvestmentGoal(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent bg-gray-50 hover:border-yellow-400 transition align-middle"
+                  placeholder="Enter your investment goal"
+                />
+              </div>
+              <p className="text-xs text-gray-500 mt-1">How much do you want to invest this month?</p>
+            </div>
+            {/* Achievable Goal */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Achievable Goal</label>
               <input
                 type="text"
-                value={monthlyBudgetInput !== undefined ? monthlyBudgetInput : (monthlyBudget === 0 ? '' : monthlyBudget)}
-                onChange={e => handleMonthlyBudgetInputChange(e.target.value)}
-                onBlur={handleMonthlyBudgetInputBlur}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={achievableGoal}
+                onChange={e => setAchievableGoal(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-gray-50 hover:border-purple-400 transition align-middle"
+                placeholder="Describe your goal (e.g., Save for a new car)"
               />
+              <p className="text-xs text-gray-500 mt-1">Describe a specific goal you want to achieve this month.</p>
             </div>
-            <p className="text-sm text-gray-500 mt-1">Set your total spending goal for the month.</p>
-          </div>
-          {/* Overspending Alert Threshold */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">Overspending Alert Threshold</label>
-            <div className="relative">
-              <Percent className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+            {/* Months to Achieve Goal */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Months to Achieve Goal</label>
               <input
                 type="number"
-                value={settings.overspendingAlert}
-                onChange={(e) => handleSettingChange('overspendingAlert', Number(e.target.value))}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                value={monthsToAchieveGoal}
+                onChange={e => setMonthsToAchieveGoal(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 hover:border-blue-400 transition align-middle"
+                placeholder="Enter number of months"
+                min="1"
               />
+              <p className="text-xs text-gray-500 mt-1">How many months do you plan to achieve your goal in?</p>
             </div>
-            <p className="text-sm text-gray-500 mt-1">Get notified when you've spent this percentage of your budget</p>
           </div>
         </div>
       </div>
