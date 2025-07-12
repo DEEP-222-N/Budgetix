@@ -1,7 +1,9 @@
 import React from 'react';
 import { Calendar, Tag } from 'lucide-react';
+import { useCurrency } from '../context/CurrencyContext';
 
 const ExpenseCard = ({ expense }) => {
+  const { symbol } = useCurrency();
   const getCategoryColor = (category) => {
     const colors = {
       Food: 'bg-green-100 text-green-800',
@@ -29,7 +31,7 @@ const ExpenseCard = ({ expense }) => {
         </div>
       </div>
       <div className="text-right">
-        <p className="text-lg font-semibold text-gray-900">${expense.amount.toLocaleString()}</p>
+        <p className="text-lg font-semibold text-gray-900">{symbol}{expense.amount.toLocaleString()}</p>
       </div>
     </div>
   );

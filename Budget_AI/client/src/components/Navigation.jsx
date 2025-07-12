@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Upload, Plus, Settings, LogOut, UserCircle } from 'lucide-react';
+import { Home, Plus, Settings, LogOut, UserCircle, Target } from 'lucide-react';
 import budgetixLogo from '../assets/image-removebg-preview (4).png';
 import { useAuth } from '../context/AuthContext';
 
@@ -34,7 +34,7 @@ const Navigation = () => {
 
   const navItems = [
     { path: '/', icon: Home, label: 'Dashboard' },
-    { path: '/upload', icon: Upload, label: 'Upload' },
+    { path: '/budget-manager', icon: Target, label: 'Budget Manager' },
     { path: '/add-expense', icon: Plus, label: 'Add Expense' },
   ];
   
@@ -133,13 +133,13 @@ const Navigation = () => {
                   </div>
                   
                   <Link 
-                    to="/settings" 
+                    to="/profile" 
                     className="block px-4 py-2 text-gray-700 hover:bg-purple-50 transition-colors duration-150"
                     onClick={() => setShowDropdown(false)}
                   >
                     <div className="flex items-center space-x-3">
-                      <Settings className="h-4 w-4 text-purple-600" />
-                      <span>Settings</span>
+                      <UserCircle className="h-4 w-4 text-purple-600" />
+                      <span>Profile</span>
                     </div>
                   </Link>
                   

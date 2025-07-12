@@ -2,11 +2,11 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Navigation from './components/Navigation';
 import Dashboard from './components/Dashboard';
-import Upload from './components/Upload';
 import AddExpense from './components/AddExpense';
-import Settings from './components/Settings';
+import Profile from './components/Profile';
 import LandingPage from './components/LandingPage';
 import Signup from './components/Signup';
+import BudgetManager from './components/BudgetManager';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CurrencyProvider } from './context/CurrencyContext';
 import { BudgetProvider } from './context/BudgetContext';
@@ -42,9 +42,9 @@ function AppContent() {
         <main className="container mx-auto px-4 py-8">
           <Routes>
             <Route path="/" element={<Dashboard />} />
-            <Route path="/upload" element={<Upload />} />
+            <Route path="/budget-manager" element={<BudgetManager />} />
             <Route path="/add-expense" element={<AddExpense />} />
-            <Route path="/settings" element={<Settings />} />
+            <Route path="/profile" element={<Profile />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </main>
