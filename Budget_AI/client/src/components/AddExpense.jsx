@@ -28,16 +28,16 @@ const AddExpense = () => {
 
   const categories = [
     'Food',
-    'Transportation',
+    'Transportation & Fuel',
     'Entertainment',
     'Housing',
-    'Utilities',
+    'Utilities & Grocery',
     'Healthcare',
     'Education',
     'Shopping',
     'Personal Care',
     'Travel',
-    'Gifts',
+    'Savings & Investments',
     'Other'
   ];
 
