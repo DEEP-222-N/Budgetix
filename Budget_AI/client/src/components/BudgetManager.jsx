@@ -6,7 +6,7 @@ import { useBudget } from '../context/BudgetContext';
 
 const allCategories = [
   'Food',
-  'Transportation & Fuel',
+  'Transportation and Fuel',
   'Entertainment',
   'Housing',
   'Utilities',
@@ -16,7 +16,7 @@ const allCategories = [
   'Shopping',
   'Personal Care',
   'Travel',
-  'Savings & Investments',
+  'Savings and Investments',
   'Other'
 ];
 
@@ -90,14 +90,14 @@ const BudgetManager = () => {
         if (budgetData) {
           setMonthlyBudget(budgetData.monthly_budget_total);
           setCategoryBudgets(allCategories.map(name => {
-            const dbName = name.toLowerCase().replace(' ', '_');
+            const dbName = name.toLowerCase().replace(/ and /gi, '_and_').replace(/ /g, '_');
             return {
               name,
               budget: budgetData[dbName] || 200,
               current: spentMap[name] || 0
             };
           }));
-          setCategoryBudgetInputs(allCategories.map(() => undefined));
+          setCategoryBudgetInputs(allCategories.map(name => String(budgetData[name.toLowerCase().replace(/ and /gi, '_and_').replace(/ /g, '_')] || 200)));
         } else {
           setCategoryBudgets(prev =>
             prev.map(cat => ({
@@ -147,7 +147,7 @@ const BudgetManager = () => {
     try {
       const budgetData = {};
       categoryBudgets.forEach(cat => {
-        const dbName = cat.name.toLowerCase().replace(' ', '_');
+        const dbName = cat.name.toLowerCase().replace(/ and /gi, '_and_').replace(/ /g, '_');
         budgetData[dbName] = Number(cat.budget) || 0;
       });
       budgetData.monthly_budget_total = Number(monthlyBudget) || 0;
