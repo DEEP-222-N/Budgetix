@@ -6,16 +6,16 @@ import { useBudget } from '../context/BudgetContext';
 
 const allCategories = [
   'Food',
-  'Transportation',
+  'Transportation & Fuel',
   'Entertainment',
   'Housing',
-  'Utilities',
+  'Utilities & Grocery',
   'Healthcare',
   'Education',
   'Shopping',
   'Personal Care',
   'Travel',
-  'Gifts',
+  'Savings & Investments',
   'Other'
 ];
 
