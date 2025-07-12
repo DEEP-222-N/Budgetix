@@ -16,7 +16,6 @@ const allCategories = [
   'Shopping',
   'Personal Care',
   'Travel',
-  'Savings and Investments',
   'Other'
 ];
 
