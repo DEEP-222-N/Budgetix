@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
-import { UserCircle, Save, Lock, Unlock } from 'lucide-react';
+import { UserCircle, Save, Lock, Unlock, FileText, X } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 const Profile = () => {
   const { user, login } = useAuth();
@@ -11,6 +12,7 @@ const Profile = () => {
     totalInvestments: '',
     totalSavings: ''
   });
+  const [isLoading, setIsLoading] = useState(true);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [locked, setLocked] = useState(true);
@@ -18,14 +20,46 @@ const Profile = () => {
   const [password, setPassword] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
-  // On mount, load from localStorage if available
-  React.useEffect(() => {
-    const stored = localStorage.getItem('profileFinancialInfo');
-    if (stored) {
-      setFormData(JSON.parse(stored));
+  // On mount, fetch financial data from Supabase
+  useEffect(() => {
+    if (user) {
+      fetchFinancialData();
     }
-  }, []);
+  }, [user]);
+
+  // Fetch financial data from Supabase
+  const fetchFinancialData = async () => {
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('financial_overview')
+        .select('total_monthly_income, total_investment_amount, total_savings')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching financial data:', error);
+      } else if (data) {
+        setFormData({
+          monthlyIncome: data.total_monthly_income || '',
+          totalInvestments: data.total_investment_amount || '',
+          totalSavings: data.total_savings || ''
+        });
+      } else {
+        // If no data exists, try to load from localStorage as fallback
+        const stored = localStorage.getItem('profileFinancialInfo');
+        if (stored) {
+          setFormData(JSON.parse(stored));
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching financial data:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   if (!user) return <div className="max-w-xl mx-auto p-8">No user info available.</div>;
 
@@ -52,14 +86,63 @@ const Profile = () => {
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      // Save to localStorage
+      // Check if record exists
+      const { data: existingData, error: fetchError } = await supabase
+        .from('financial_overview')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+      
+      let error;
+      
+      if (fetchError && fetchError.code !== 'PGRST116') {
+        console.error('Error checking existing data:', fetchError);
+        throw fetchError;
+      }
+      
+      // Prepare data object
+      const financialData = {
+        user_id: user.id,
+        total_monthly_income: parseFloat(formData.monthlyIncome) || 0,
+        total_investment_amount: parseFloat(formData.totalInvestments) || 0,
+        total_savings: parseFloat(formData.totalSavings) || 0,
+        updated_at: new Date().toISOString()
+      };
+      
+      if (existingData) {
+        // Update existing record
+        const { error: updateError } = await supabase
+          .from('financial_overview')
+          .update(financialData)
+          .eq('user_id', user.id);
+        error = updateError;
+      } else {
+        // Insert new record
+        const { error: insertError } = await supabase
+          .from('financial_overview')
+          .insert(financialData);
+        error = insertError;
+      }
+
+      if (error) {
+        console.error('Error saving to Supabase:', error);
+        throw error;
+      }
+
+      // Also save to localStorage as backup
       localStorage.setItem('profileFinancialInfo', JSON.stringify(formData));
+      
       // Dispatch custom event for other components
       window.dispatchEvent(new Event('profileUpdated'));
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Show success message
+      setShowSuccessMessage(true);
+      setTimeout(() => setShowSuccessMessage(false), 5000); // Hide after 5 seconds
+      
       setIsEditing(false);
     } catch (error) {
       console.error('Error saving profile data:', error);
+      alert('Failed to save financial data. Please try again.');
     } finally {
       setIsSaving(false);
     }
@@ -104,7 +187,20 @@ const Profile = () => {
   };
 
   return (
-    <div className="max-w-2xl mx-auto mt-10 p-8 bg-white rounded-xl shadow-lg border border-gray-100">
+    <div className="max-w-2xl mx-auto mt-10 p-8 bg-white rounded-xl shadow-lg border border-gray-100 relative">
+      {/* Success Message */}
+      {showSuccessMessage && (
+        <div className="fixed top-20 left-0 right-0 mx-auto w-96 p-4 bg-green-50 border border-green-100 rounded-lg shadow-lg flex items-center z-50">
+          <FileText className="mr-3 h-6 w-6 text-green-600" />
+          <span className="font-medium text-green-800">Settings saved successfully!</span>
+          <button 
+            onClick={() => setShowSuccessMessage(false)} 
+            className="ml-auto text-green-600 hover:text-green-800"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      )}
       <div className="flex flex-col items-center mb-8">
         <UserCircle className="h-20 w-20 text-purple-600 mb-2" />
         <h1 className="text-2xl font-bold text-gray-900 mb-1">{displayName}</h1>
@@ -151,6 +247,11 @@ const Profile = () => {
 
           {/* Blurred Financial Info Section */}
           <div className={locked ? "pointer-events-none filter blur-sm opacity-60 select-none" : ""}>
+            {isLoading ? (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-purple-500"></div>
+              </div>
+            ) : (
             <div className="space-y-4">
               {/* Monthly Total Income */}
               <div>
@@ -218,6 +319,7 @@ const Profile = () => {
                 )}
               </div>
             </div>
+            )}
 
             {/* Action Buttons */}
             <div className="flex gap-3 mt-6">
