@@ -47,12 +47,14 @@ const Profile = () => {
           totalInvestments: data.total_investment_amount || '',
           totalSavings: data.total_savings || ''
         });
+        setIsEditing(false); // Record exists, show display mode
       } else {
-        // If no data exists, try to load from localStorage as fallback
-        const stored = localStorage.getItem('profileFinancialInfo');
-        if (stored) {
-          setFormData(JSON.parse(stored));
-        }
+        // If no data exists, set all fields to empty
+        setFormData({
+          monthlyIncome: '',
+          totalInvestments: '',
+          totalSavings: ''
+        });
       }
     } catch (err) {
       console.error('Error fetching financial data:', err);
@@ -270,7 +272,11 @@ const Profile = () => {
                   />
                 ) : (
                   <div className="text-lg font-medium text-gray-900">
-                    {symbol}{formData.monthlyIncome || '0'}
+                    {formData.monthlyIncome === 0 || formData.monthlyIncome === '0'
+                      ? `${symbol}0`
+                      : formData.monthlyIncome
+                        ? `${symbol}${formData.monthlyIncome}`
+                        : ''}
                   </div>
                 )}
               </div>
@@ -292,7 +298,11 @@ const Profile = () => {
                   />
                 ) : (
                   <div className="text-lg font-medium text-gray-900">
-                    {symbol}{formData.totalInvestments || '0'}
+                    {formData.totalInvestments === 0 || formData.totalInvestments === '0'
+                      ? `${symbol}0`
+                      : formData.totalInvestments
+                        ? `${symbol}${formData.totalInvestments}`
+                        : ''}
                   </div>
                 )}
               </div>
@@ -314,7 +324,11 @@ const Profile = () => {
                   />
                 ) : (
                   <div className="text-lg font-medium text-gray-900">
-                    {symbol}{formData.totalSavings || '0'}
+                    {formData.totalSavings === 0 || formData.totalSavings === '0'
+                      ? `${symbol}0`
+                      : formData.totalSavings
+                        ? `${symbol}${formData.totalSavings}`
+                        : ''}
                   </div>
                 )}
               </div>
