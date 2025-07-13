@@ -32,6 +32,35 @@ const Navigation = () => {
   // Display greeting with name
   const greeting = `Hi ${displayName}`;
 
+  // Check profile completeness from localStorage
+  const [profileIncomplete, setProfileIncomplete] = useState(false);
+  useEffect(() => {
+    const checkProfile = () => {
+      const stored = localStorage.getItem('profileFinancialInfo');
+      if (stored) {
+        const { monthlyIncome, totalInvestments, totalSavings } = JSON.parse(stored);
+        if (
+          monthlyIncome === '' || monthlyIncome === undefined ||
+          totalInvestments === '' || totalInvestments === undefined ||
+          totalSavings === '' || totalSavings === undefined
+        ) {
+          setProfileIncomplete(true);
+        } else {
+          setProfileIncomplete(false);
+        }
+      } else {
+        setProfileIncomplete(true);
+      }
+    };
+    checkProfile();
+    window.addEventListener('storage', checkProfile);
+    window.addEventListener('profileUpdated', checkProfile);
+    return () => {
+      window.removeEventListener('storage', checkProfile);
+      window.removeEventListener('profileUpdated', checkProfile);
+    };
+  }, []);
+
   const navItems = [
     { path: '/', icon: Home, label: 'Dashboard' },
     { path: '/budget-manager', icon: Target, label: 'Budget Manager' },
@@ -113,11 +142,14 @@ const Navigation = () => {
             <div className="relative profile-dropdown">
               <button 
                 onClick={() => setShowDropdown(!showDropdown)}
-                className="flex items-center justify-center w-10 h-10 rounded-full bg-purple-600 hover:bg-purple-500 text-white font-semibold shadow-md hover:shadow-lg transition-all duration-300 border-2 border-purple-300"
+                className="flex items-center justify-center w-10 h-10 rounded-full bg-purple-600 hover:bg-purple-500 text-white font-semibold shadow-md hover:shadow-lg transition-all duration-300 border-2 border-purple-300 relative"
                 aria-label="Profile menu"
                 aria-expanded={showDropdown}
               >
                 {userInitial}
+                {profileIncomplete && (
+                  <span className="absolute -top-1 -right-1 bg-red-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold border-2 border-white">1</span>
+                )}
               </button>
               
               {showDropdown && (
@@ -137,9 +169,12 @@ const Navigation = () => {
                     className="block px-4 py-2 text-gray-700 hover:bg-purple-50 transition-colors duration-150"
                     onClick={() => setShowDropdown(false)}
                   >
-                    <div className="flex items-center space-x-3">
+                    <div className="flex items-center space-x-3 relative">
                       <UserCircle className="h-4 w-4 text-purple-600" />
                       <span>Profile</span>
+                      {profileIncomplete && (
+                        <span className="absolute -top-2 left-16 bg-red-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold border-2 border-white">1</span>
+                      )}
                     </div>
                   </Link>
                   

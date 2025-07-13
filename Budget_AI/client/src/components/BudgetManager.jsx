@@ -272,23 +272,6 @@ const BudgetManager = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-16 gap-y-10 md:items-start md:justify-center">
           {/* Left Column */}
           <div className="flex-1 min-w-0 space-y-8 md:pr-8 md:px-2">
-            {/* Currency */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Currency</label>
-              <select
-                value={currency}
-                onChange={(e) => handleSettingChange('currency', e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 hover:border-blue-400 transition"
-              >
-                <option value="USD">USD ($)</option>
-                <option value="EUR">EUR (€)</option>
-                <option value="GBP">GBP (£)</option>
-                <option value="JPY">JPY (¥)</option>
-                <option value="CAD">CAD (C$)</option>
-                <option value="INR">INR (₹)</option>
-              </select>
-              <p className="text-xs text-gray-500 mt-1">Choose the currency you want to use for your budget.</p>
-            </div>
             {/* Monthly Budget Goal */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Monthly Budget Goal</label>
