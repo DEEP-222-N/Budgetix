@@ -177,7 +177,7 @@ const Profile = () => {
               {/* Total Investments */}
               <div>
                 <label htmlFor="totalInvestments" className="block text-sm font-medium text-gray-700 mb-2">
-                  Total Investments (Stocks, Crypto, etc.)
+                  Total Investment Value (Stocks, Crypto, Mutual Funds, etc.)
                 </label>
                 {isEditing ? (
                   <input
