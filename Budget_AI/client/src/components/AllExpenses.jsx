@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { useCurrency } from '../context/CurrencyContext';
-import ExpenseCard from './ExpenseCard';
 import { useNavigate } from 'react-router-dom';
+import { Calendar, Search, X } from 'lucide-react';
 
 const AllExpenses = () => {
   const { user } = useAuth();
@@ -51,6 +51,20 @@ const AllExpenses = () => {
     const { error } = await supabase.from('expenses').delete().eq('id', id);
     if (!error) {
       setExpenses(expenses => expenses.filter(e => e.id !== id));
+      
+      // Update total expenses in financial_overview after deletion
+      try {
+        const { data: updatedData, error: updateError } = await supabase
+          .rpc('update_total_expenses', { user_id_param: user.id });
+          
+        if (updateError) {
+          console.error('Error updating total expenses after deletion:', updateError);
+        } else {
+          console.log('Total expenses updated successfully after deletion:', updatedData);
+        }
+      } catch (updateError) {
+        console.error('Error calling update_total_expenses function after deletion:', updateError);
+      }
     } else {
       alert('Failed to delete expense.');
     }
@@ -68,6 +82,20 @@ const AllExpenses = () => {
     if (!error) {
       setExpenses(expenses => expenses.map(e => e.id === id ? { ...e, description: editForm.description, amount: parseFloat(editForm.amount) } : e));
       setEditingId(null);
+      
+      // Update total expenses in financial_overview after editing
+      try {
+        const { data: updatedData, error: updateError } = await supabase
+          .rpc('update_total_expenses', { user_id_param: user.id });
+          
+        if (updateError) {
+          console.error('Error updating total expenses after edit:', updateError);
+        } else {
+          console.log('Total expenses updated successfully after edit:', updatedData);
+        }
+      } catch (updateError) {
+        console.error('Error calling update_total_expenses function after edit:', updateError);
+      }
     } else {
       alert('Failed to update expense.');
     }
@@ -89,85 +117,146 @@ const AllExpenses = () => {
     );
   }
 
+  // Function to get category color class
+  const getCategoryColor = (category) => {
+    const colors = {
+      Food: 'bg-green-100',
+      Grocery: 'bg-yellow-100',
+      Education: 'bg-blue-100',
+      'Transportation and Fuel': 'bg-cyan-100',
+      Transportation: 'bg-cyan-100',
+      Entertainment: 'bg-purple-100',
+      Housing: 'bg-pink-100',
+      Utilities: 'bg-orange-100',
+      Healthcare: 'bg-red-100',
+      Shopping: 'bg-indigo-100',
+      'Personal Care': 'bg-teal-100',
+      Travel: 'bg-fuchsia-100',
+      Other: 'bg-gray-200',
+      default: 'bg-gray-100'
+    };
+    return colors[category] || colors.default;
+  };
+
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4">
-      <button
-        className="mb-6 px-4 py-2 rounded-lg bg-gradient-to-r from-purple-900 via-purple-800 to-indigo-900 text-white font-semibold shadow-md hover:bg-purple-800 focus:outline-none focus:ring-2 focus:ring-purple-400 transition-all duration-300"
-        onClick={() => navigate('/')}
-      >
-        ← Back to Dashboard
-      </button>
-      <h2 className="text-2xl font-bold mb-4">All Expenses</h2>
-      <input
-        type="text"
-        placeholder="Search by description or category..."
-        className="w-full mb-4 px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 bg-gray-50"
-        value={searchTerm}
-        onChange={e => setSearchTerm(e.target.value)}
-      />
-      <div className="space-y-3">
-        {expensesError ? (
-          <div className="text-center py-8 text-red-500">{expensesError}</div>
-        ) : filteredExpenses(expenses, searchTerm).length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
-            <p>No expenses found.</p>
-          </div>
-        ) : (
-          filteredExpenses(expenses, searchTerm).map((expense) => (
-            <div key={expense.id} className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+    <div className="max-w-5xl mx-auto py-8 px-4 bg-white rounded-xl shadow-sm">
+      <div className="flex justify-between items-center mb-8">
+        <button
+          className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-900 via-purple-800 to-indigo-900 text-white font-semibold shadow-md hover:bg-purple-800 focus:outline-none focus:ring-2 focus:ring-purple-400 transition-all duration-300"
+          onClick={() => navigate('/')}
+        >
+          ← Back to Dashboard
+        </button>
+        <h2 className="text-2xl font-bold">All Expenses</h2>
+      </div>
+      
+      <div className="relative mb-6">
+        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+          <Search className="h-5 w-5 text-gray-400" />
+        </div>
+        <input
+          type="text"
+          placeholder="Search by description or category..."
+          className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 bg-gray-50 shadow-sm"
+          value={searchTerm}
+          onChange={e => setSearchTerm(e.target.value)}
+        />
+        {searchTerm && (
+          <button 
+            className="absolute inset-y-0 right-0 pr-3 flex items-center"
+            onClick={() => setSearchTerm('')}
+          >
+            <X className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+          </button>
+        )}
+      </div>
+      
+      {expensesError ? (
+        <div className="text-center py-8 text-red-500">{expensesError}</div>
+      ) : filteredExpenses(expenses, searchTerm).length === 0 ? (
+        <div className="text-center py-12 bg-gray-50 rounded-xl border border-gray-100">
+          <p className="text-gray-500 font-medium">No expenses found.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {filteredExpenses(expenses, searchTerm).map((expense) => (
+            <div key={expense.id} className="border border-gray-100 rounded-xl shadow-sm overflow-hidden">
               {editingId === expense.id ? (
-                <div className="flex-1 flex flex-col md:flex-row md:items-center gap-2">
-                  <input
-                    className="border rounded px-2 py-1 mr-2"
-                    value={editForm.description}
-                    onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
-                    placeholder={expense.description || 'Description'}
-                  />
-                  <input
-                    className="border rounded px-2 py-1 mr-2 w-24"
-                    type="number"
-                    value={editForm.amount}
-                    onChange={e => setEditForm(f => ({ ...f, amount: e.target.value }))}
-                    placeholder={expense.amount !== undefined ? expense.amount : 'Amount'}
-                  />
-                  <div className="flex gap-2 mt-2 md:mt-0">
-                    <button
-                      className="px-4 py-1 rounded-lg bg-green-600 text-white font-semibold text-sm shadow hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-400 transition"
-                      onClick={() => handleSaveEdit(expense.id)}
-                    >
-                      Save
-                    </button>
-                    <button
-                      className="px-4 py-1 rounded-lg bg-gray-300 text-gray-800 font-semibold text-sm shadow hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-300 transition"
-                      onClick={() => setEditingId(null)}
-                    >
-                      Cancel
-                    </button>
+                <div className="p-4 bg-white">
+                  <div className="flex flex-col md:flex-row md:items-center gap-4">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                      <input
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                        value={editForm.description}
+                        onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                        placeholder="Description"
+                      />
+                    </div>
+                    <div className="w-32">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+                      <input
+                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                        type="number"
+                        value={editForm.amount}
+                        onChange={e => setEditForm(f => ({ ...f, amount: e.target.value }))}
+                        placeholder="Amount"
+                      />
+                    </div>
+                    <div className="flex gap-2 self-end">
+                      <button
+                        className="px-4 py-2 rounded-lg bg-green-600 text-white font-medium text-sm shadow hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-400 transition"
+                        onClick={() => handleSaveEdit(expense.id)}
+                      >
+                        Save
+                      </button>
+                      <button
+                        className="px-4 py-2 rounded-lg bg-gray-200 text-gray-800 font-medium text-sm shadow hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300 transition"
+                        onClick={() => setEditingId(null)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
                   </div>
                 </div>
               ) : (
-                <>
-                  <ExpenseCard expense={expense} />
-                  <div className="flex flex-row gap-2 ml-4 mt-2 md:mt-0">
-                    <button
-                      className="px-4 py-1 rounded-lg bg-red-600 text-white font-semibold text-sm shadow hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-400 transition"
-                      onClick={() => handleDeleteExpense(expense.id)}
-                    >
-                      Delete
-                    </button>
-                    <button
-                      className="px-4 py-1 rounded-lg bg-yellow-400 text-gray-900 font-semibold text-sm shadow hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-yellow-300 transition"
-                      onClick={() => handleStartEdit(expense)}
-                    >
-                      Update
-                    </button>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-white">
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-3 sm:mb-0">
+                    <div className={`${getCategoryColor(expense.category)} px-4 py-2 rounded-full text-sm font-medium w-fit`}>
+                      {expense.category}
+                    </div>
+                    <div>
+                      <p className="font-medium text-gray-900 text-lg">{expense.description}</p>
+                      <div className="flex items-center gap-1 text-sm text-gray-500 mt-1">
+                        <Calendar className="h-4 w-4" />
+                        <span>{new Date(expense.date).toLocaleDateString()}</span>
+                      </div>
+                    </div>
                   </div>
-                </>
+                  
+                  <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
+                    <p className="text-lg font-bold text-gray-900">{symbol}{expense.amount.toLocaleString()}</p>
+                    <div className="flex gap-2">
+                      <button
+                        className="px-4 py-2 rounded-lg bg-yellow-400 text-gray-900 font-medium text-sm shadow hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-yellow-300 transition"
+                        onClick={() => handleStartEdit(expense)}
+                      >
+                        Update
+                      </button>
+                      <button
+                        className="px-4 py-2 rounded-lg bg-red-600 text-white font-medium text-sm shadow hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-400 transition"
+                        onClick={() => handleDeleteExpense(expense.id)}
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
