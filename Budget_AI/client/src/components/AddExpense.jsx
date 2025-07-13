@@ -162,6 +162,22 @@ const AddExpense = () => {
       
       console.log('Transaction saved successfully:', data);
       
+      // Call the direct update function to update total expenses in financial_overview
+      try {
+        const { data: updatedData, error: updateError } = await supabase
+          .rpc('update_total_expenses', { user_id_param: user.id });
+          
+        if (updateError) {
+          console.error('Error updating total expenses:', updateError);
+          // Continue even if this fails, as the main expense was saved
+        } else {
+          console.log('Total expenses updated successfully:', updatedData);
+        }
+      } catch (updateError) {
+        console.error('Error calling update_total_expenses function:', updateError);
+        // Continue even if this fails, as the main expense was saved
+      }
+      
       // Show success message
       setShowSuccess(true);
       

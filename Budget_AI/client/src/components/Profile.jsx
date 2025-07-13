@@ -130,6 +130,22 @@ const Profile = () => {
         console.error('Error saving to Supabase:', error);
         throw error;
       }
+      
+      // Call the direct update function to ensure total expenses are updated
+      try {
+        const { data: updatedData, error: updateError } = await supabase
+          .rpc('update_total_expenses', { user_id_param: user.id });
+          
+        if (updateError) {
+          console.error('Error updating total expenses:', updateError);
+          // Continue even if this fails, as the main data was saved
+        } else {
+          console.log('Total expenses updated successfully:', updatedData);
+        }
+      } catch (updateError) {
+        console.error('Error calling update_total_expenses function:', updateError);
+        // Continue even if this fails, as the main data was saved
+      }
 
       // Also save to localStorage as backup
       localStorage.setItem('profileFinancialInfo', JSON.stringify(formData));
@@ -194,7 +210,7 @@ const Profile = () => {
       {showSuccessMessage && (
         <div className="fixed top-20 left-0 right-0 mx-auto w-96 p-4 bg-green-50 border border-green-100 rounded-lg shadow-lg flex items-center z-50">
           <FileText className="mr-3 h-6 w-6 text-green-600" />
-          <span className="font-medium text-green-800">Settings saved successfully!</span>
+          <span className="font-medium text-green-800">Financial data saved successfully!</span>
           <button 
             onClick={() => setShowSuccessMessage(false)} 
             className="ml-auto text-green-600 hover:text-green-800"
