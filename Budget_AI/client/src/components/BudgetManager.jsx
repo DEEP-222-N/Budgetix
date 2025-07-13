@@ -202,6 +202,39 @@ const BudgetManager = () => {
     }
   };
 
+  // Handler to save only Budget Settings fields
+  const handleBudgetSettingsSave = async () => {
+    if (!user || !supabase) return;
+    setIsSaving(true);
+    setError(null);
+    try {
+      const budgetSettingsData = {
+        user_id: user.id,
+        monthly_budget_total: Number(monthlyBudgetInput !== undefined ? monthlyBudgetInput : monthlyBudget) || 0,
+        monthly_savings_goal: monthlySavingsGoal ? Number(monthlySavingsGoal) : 0,
+        monthly_investment_goal: monthlyInvestmentGoal ? Number(monthlyInvestmentGoal) : 0,
+        achievable_goal: achievableGoal || null,
+        months_to_achieve_goal: monthsToAchieveGoal ? Number(monthsToAchieveGoal) : null,
+        updated_at: new Date().toISOString(),
+      };
+      const { error: upsertError } = await supabase
+        .from('budgets')
+        .upsert(budgetSettingsData, { onConflict: 'user_id' });
+      if (upsertError) {
+        setError('Failed to save budget settings');
+        setShowError(true);
+        return;
+      }
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 3000);
+    } catch (err) {
+      setError('An unexpected error occurred while saving budget settings');
+      setShowError(true);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // Check if all data is loaded (after all hooks)
   const isDataLoaded = !loading && user;
 
@@ -269,9 +302,9 @@ const BudgetManager = () => {
           <Target className="h-7 w-7 text-blue-600" />
           <h3 className="text-2xl font-extrabold text-gray-900 tracking-tight">Budget Settings</h3>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 md:gap-x-16 gap-y-10 md:items-start md:justify-center">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-8">
           {/* Left Column */}
-          <div className="flex-1 min-w-0 space-y-8 md:pr-8 md:px-2">
+          <div className="space-y-6">
             {/* Monthly Budget Goal */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Monthly Budget Goal</label>
@@ -302,9 +335,21 @@ const BudgetManager = () => {
               </div>
               <p className="text-xs text-gray-500 mt-1">How much do you want to save this month?</p>
             </div>
+            {/* Achievable Goal */}
+            <div>
+              <label className="block text-sm font-semibold text-gray-700 mb-2">Achievable Goal</label>
+              <input
+                type="text"
+                value={achievableGoal}
+                onChange={e => setAchievableGoal(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-gray-50 hover:border-purple-400 transition align-middle"
+                placeholder="Describe your goal (e.g., Save for a new car)"
+              />
+              <p className="text-xs text-gray-500 mt-1">Describe a specific goal you want to achieve this month.</p>
+            </div>
           </div>
           {/* Right Column */}
-          <div className="flex-1 min-w-0 space-y-8 md:pl-8 md:px-2 pt-8 md:pt-0">
+          <div className="space-y-6">
             {/* Monthly Investment Goal */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Monthly Investment Goal</label>
@@ -320,18 +365,6 @@ const BudgetManager = () => {
               </div>
               <p className="text-xs text-gray-500 mt-1">How much do you want to invest this month?</p>
             </div>
-            {/* Achievable Goal */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Achievable Goal</label>
-              <input
-                type="text"
-                value={achievableGoal}
-                onChange={e => setAchievableGoal(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-gray-50 hover:border-purple-400 transition align-middle"
-                placeholder="Describe your goal (e.g., Save for a new car)"
-              />
-              <p className="text-xs text-gray-500 mt-1">Describe a specific goal you want to achieve this month.</p>
-            </div>
             {/* Months to Achieve Goal */}
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">Months to Achieve Goal</label>
@@ -346,6 +379,15 @@ const BudgetManager = () => {
               <p className="text-xs text-gray-500 mt-1">How many months do you plan to achieve your goal in?</p>
             </div>
           </div>
+        </div>
+        <div className="flex justify-end mt-8">
+          <button
+            className="px-6 py-3 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all duration-300"
+            onClick={handleBudgetSettingsSave}
+            disabled={isSaving}
+          >
+            {isSaving ? 'Saving...' : 'Save Budget Settings'}
+          </button>
         </div>
       </div>
       {/* Category Budgets */}

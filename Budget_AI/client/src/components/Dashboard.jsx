@@ -208,10 +208,10 @@ const Dashboard = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600">Remaining</p>
-              <p className="text-2xl font-bold text-green-600">{symbol}{remaining.toLocaleString()}</p>
+              <p className={`text-2xl font-bold ${remaining < 0 ? 'text-red-600' : 'text-green-600'}`}>{symbol}{remaining.toLocaleString()}</p>
             </div>
-            <div className="bg-green-100 p-3 rounded-full">
-              <TrendingUp className="h-6 w-6 text-green-600" />
+            <div className={`p-3 rounded-full ${remaining < 0 ? 'bg-red-100' : 'bg-green-100'}`}>
+              <TrendingUp className={`h-6 w-6 ${remaining < 0 ? 'text-red-600' : 'text-green-600'}`} />
             </div>
           </div>
         </div>
