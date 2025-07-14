@@ -13,7 +13,8 @@ const AddExpense = () => {
     category: '',
     description: '',
     date: new Date().toISOString().split('T')[0],
-    paymentMethod: ''
+    paymentMethod: '',
+    frequency: '' // Add frequency to form state
   });
   const [showSuccess, setShowSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -69,6 +70,42 @@ const AddExpense = () => {
     'Mobile Payment',
     'Other'
   ];
+
+  const frequencyOptions = [
+    'Daily',
+    'Weekly',
+    'Monthly',
+    'Quarterly',
+    '6 Months',
+    'Yearly'
+  ];
+
+  function getNextDate(last, frequency) {
+    const date = new Date(last);
+    switch (frequency) {
+      case 'Daily':
+        date.setDate(date.getDate() + 1);
+        break;
+      case 'Weekly':
+        date.setDate(date.getDate() + 7);
+        break;
+      case 'Monthly':
+        date.setMonth(date.getMonth() + 1);
+        break;
+      case 'Quarterly':
+        date.setMonth(date.getMonth() + 3);
+        break;
+      case '6 Months':
+        date.setMonth(date.getMonth() + 6);
+        break;
+      case 'Yearly':
+        date.setFullYear(date.getFullYear() + 1);
+        break;
+      default:
+        break;
+    }
+    return date.toISOString().split('T')[0];
+  }
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -137,14 +174,19 @@ const AddExpense = () => {
       }
       
       // Prepare data for Supabase expenses table
+      const isRecurring = formData.frequency !== '';
+      const today = new Date().toISOString().split('T')[0];
       const expenseData = {
         amount: parseFloat(formData.amount),
         category: formData.category,
         description: formData.description || '',
         date: formData.date,
         payment_method: formData.paymentMethod,
-        // created_at is handled by Supabase default value
-        // id is handled by Supabase uuid generation
+        frequency: formData.frequency,
+        is_recurring: isRecurring,
+        recurring_start_date: isRecurring ? today : null,
+        last_occurred: isRecurring ? today : null,
+        recurring_next_date: isRecurring ? getNextDate(today, formData.frequency) : null,
         user_id: user.id // Use the authenticated user's ID from AuthContext
       };
       
@@ -187,7 +229,8 @@ const AddExpense = () => {
         category: 'Food',
         description: '',
         date: new Date().toISOString().split('T')[0],
-        paymentMethod: 'Credit Card'
+        paymentMethod: 'Credit Card',
+        frequency: ''
       });
       
       // Hide success message after 3 seconds
@@ -302,6 +345,24 @@ const AddExpense = () => {
               <option key={method} value={method}>
                 {method}
               </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="frequency">
+            <i className="fas fa-clock"></i> Frequency
+          </label>
+          <select
+            id="frequency"
+            name="frequency"
+            value={formData.frequency}
+            onChange={handleChange}
+            required
+          >
+            <option value="" disabled>Select Frequency</option>
+            {frequencyOptions.map(option => (
+              <option key={option} value={option}>{option}</option>
             ))}
           </select>
         </div>
