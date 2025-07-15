@@ -57,7 +57,7 @@ const AddExpense = () => {
     'Healthcare',
     'Education',
     'Shopping',
-    'Personal Care',
+    'Insurance',
     'Travel',
     'Other'
   ];
