@@ -358,7 +358,7 @@ const AddExpense = () => {
             name="frequency"
             value={formData.frequency}
             onChange={handleChange}
-            required
+            // required // Removed to make optional
           >
             <option value="" disabled>Select Frequency</option>
             {frequencyOptions.map(option => (
