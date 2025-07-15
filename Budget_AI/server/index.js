@@ -3,6 +3,8 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
+require('./recurring-expenses'); // Automatically run recurring job
+
 const authRoutes = require('./routes/auth');
 
 const app = express();
