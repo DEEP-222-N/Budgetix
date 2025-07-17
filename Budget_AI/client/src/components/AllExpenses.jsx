@@ -65,6 +65,29 @@ const AllExpenses = () => {
       } catch (updateError) {
         console.error('Error calling update_total_expenses function after deletion:', updateError);
       }
+      // Decrement BudgeXP points by 1 (not below 0)
+      try {
+        const { data: xpData, error: xpFetchError } = await supabase
+          .from('financial_overview')
+          .select('budgexp_points')
+          .eq('user_id', user.id)
+          .single();
+        if (xpFetchError) {
+          console.error('Error fetching BudgeXP points:', xpFetchError);
+        } else {
+          const currentXP = xpData?.budgexp_points || 0;
+          const newXP = currentXP > 0 ? currentXP - 1 : 0;
+          const { error: xpUpdateError } = await supabase
+            .from('financial_overview')
+            .update({ budgexp_points: newXP })
+            .eq('user_id', user.id);
+          if (xpUpdateError) {
+            console.error('Error decrementing BudgeXP points:', xpUpdateError);
+          }
+        }
+      } catch (xpError) {
+        console.error('Error decrementing BudgeXP points:', xpError);
+      }
     } else {
       alert('Failed to delete expense.');
     }

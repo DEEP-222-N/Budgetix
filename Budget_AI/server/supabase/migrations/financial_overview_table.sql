@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS financial_overview (
   total_savings DECIMAL(15, 2) NOT NULL DEFAULT 0,
   total_investment_amount DECIMAL(15, 2) NOT NULL DEFAULT 0,
   total_expenses DECIMAL(15, 2) NOT NULL DEFAULT 0,
+  budgexp_points INTEGER NOT NULL DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT now()
 );
