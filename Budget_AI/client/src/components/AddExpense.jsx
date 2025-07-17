@@ -221,6 +221,30 @@ const AddExpense = () => {
         console.error('Error calling update_total_expenses function:', updateError);
         // Continue even if this fails, as the main expense was saved
       }
+
+      // Increment BudgeXP points by 1 (fetch, increment, update)
+      try {
+        // Fetch current points
+        const { data: xpData, error: xpFetchError } = await supabase
+          .from('financial_overview')
+          .select('budgexp_points')
+          .eq('user_id', user.id)
+          .single();
+        if (xpFetchError) {
+          console.error('Error fetching BudgeXP points:', xpFetchError);
+        } else {
+          const currentXP = xpData?.budgexp_points || 0;
+          const { error: xpUpdateError } = await supabase
+            .from('financial_overview')
+            .update({ budgexp_points: currentXP + 1 })
+            .eq('user_id', user.id);
+          if (xpUpdateError) {
+            console.error('Error updating BudgeXP points:', xpUpdateError);
+          }
+        }
+      } catch (xpError) {
+        console.error('Error incrementing BudgeXP points:', xpError);
+      }
       
       // Show success message
       setShowSuccess(true);
@@ -283,7 +307,7 @@ const AddExpense = () => {
       <form onSubmit={handleSubmit} className="expense-form">
         <div className="form-group">
           <label htmlFor="amount">
-            <i className="fas fa-dollar-sign"></i> Amount
+            <i className="fas fa-dollar-sign"></i> Amount <span style={{color: 'red'}}>*</span>
           </label>
           <input
             type="number"
@@ -300,7 +324,7 @@ const AddExpense = () => {
         
         <div className="form-group">
           <label htmlFor="date">
-            <i className="far fa-calendar"></i> Date
+            <i className="far fa-calendar"></i> Date <span style={{color: 'red'}}>*</span>
           </label>
           <input
             type="date"
@@ -314,7 +338,7 @@ const AddExpense = () => {
         
         <div className="form-group">
           <label htmlFor="category">
-            <i className="fas fa-tag"></i> Category
+            <i className="fas fa-tag"></i> Category <span style={{color: 'red'}}>*</span>
           </label>
           <select
             id="category"
@@ -334,7 +358,7 @@ const AddExpense = () => {
         
         <div className="form-group">
           <label htmlFor="paymentMethod">
-            <i className="fas fa-credit-card"></i> Payment Method
+            <i className="fas fa-credit-card"></i> Payment Method <span style={{color: 'red'}}>*</span>
           </label>
           <select
             id="paymentMethod"
@@ -565,6 +589,13 @@ const AddExpense = () => {
           </div>
         )}
       </div>
+      {/* Coin +1 Animation - bottom right */}
+      {showSuccessToast && (
+        <div className="fixed bottom-8 right-8 z-50 animate-coin-up bg-white border border-yellow-300 shadow-lg rounded-full flex items-center px-4 py-2 pointer-events-none">
+          <span style={{fontSize: '2rem', marginRight: '0.5rem'}}>🪙</span>
+          <span className="text-yellow-500 font-bold text-xl">+1</span>
+        </div>
+      )}
     </div>
   );
 };

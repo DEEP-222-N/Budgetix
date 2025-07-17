@@ -21,6 +21,7 @@ const Profile = () => {
   const [passwordError, setPasswordError] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [budgexpPoints, setBudgexpPoints] = useState(0);
 
   // On mount, fetch financial data from Supabase
   useEffect(() => {
@@ -35,7 +36,7 @@ const Profile = () => {
     try {
       const { data, error } = await supabase
         .from('financial_overview')
-        .select('total_monthly_income, total_investment_amount, total_savings')
+        .select('total_monthly_income, total_investment_amount, total_savings, budgexp_points')
         .eq('user_id', user.id)
         .single();
       
@@ -47,6 +48,7 @@ const Profile = () => {
           totalInvestments: data.total_investment_amount || '',
           totalSavings: data.total_savings || ''
         });
+        setBudgexpPoints(data.budgexp_points || 0);
         setIsEditing(false); // Record exists, show display mode
       } else {
         // If no data exists, set all fields to empty
@@ -55,6 +57,7 @@ const Profile = () => {
           totalInvestments: '',
           totalSavings: ''
         });
+        setBudgexpPoints(0);
       }
     } catch (err) {
       console.error('Error fetching financial data:', err);
@@ -241,6 +244,11 @@ const Profile = () => {
             <option value="CAD">CAD (C$)</option>
             <option value="INR">INR (₹)</option>
           </select>
+          {/* BudgeXP Points - show here */}
+          <div className="mt-4 mb-2">
+            <span className="block text-sm font-medium text-purple-700">BudgeXP Points</span>
+            <span className="text-xl font-bold text-purple-800">{budgexpPoints}</span>
+          </div>
           <p className="text-xs text-gray-500 mt-1">Choose the currency you want to use for your budget.</p>
         </div>
 
