@@ -46,42 +46,68 @@ async function processRecurringExpenses() {
 
   const today = new Date().toISOString().split('T')[0];
   for (const exp of recurringExpenses) {
-    // Use recurring_next_date if available, otherwise calculate from last_occurred
-    const nextDate = exp.recurring_next_date || getNextDate(exp.last_occurred, exp.frequency);
-    if (nextDate && nextDate <= today) {
-      // Insert a new expense for today
-      const { error: insertError } = await supabase.from('expenses').insert({
-        user_id: exp.user_id,
-        amount: exp.amount,
-        category: exp.category,
-        description: exp.description,
-        date: today,
-        payment_method: exp.payment_method,
-        frequency: exp.frequency,
-        is_recurring: true,
-        recurring_start_date: exp.recurring_start_date,
-        last_occurred: today,
-        recurring_next_date: getNextDate(today, exp.frequency)
-      });
+    let lastDate = exp.last_occurred;
+    let nextDate = getNextDate(lastDate, exp.frequency);
+    while (nextDate && nextDate <= today) {
+      // Stop if recurring_end_date is set and nextDate is after it
+      if (exp.recurring_end_date && nextDate > exp.recurring_end_date) {
+        break;
+      }
+      // Check if an expense for nextDate already exists for this user/category
+      const { data: existingExpenses, error: checkError } = await supabase
+        .from('expenses')
+        .select('id')
+        .eq('user_id', exp.user_id)
+        .eq('category', exp.category)
+        .eq('date', nextDate)
+        .eq('is_recurring', true);
 
-      if (insertError) {
-        console.error('Error inserting recurring expense:', insertError.message);
-        continue;
+      if (checkError) {
+        console.error('Error checking for existing expense:', checkError.message);
+        break;
+      }
+
+      if (!existingExpenses || existingExpenses.length === 0) {
+        // Insert a new expense for nextDate
+        const { error: insertError } = await supabase.from('expenses').insert({
+          user_id: exp.user_id,
+          amount: exp.amount,
+          category: exp.category,
+          description: exp.description,
+          date: nextDate,
+          payment_method: exp.payment_method,
+          frequency: exp.frequency,
+          is_recurring: true,
+          recurring_start_date: exp.recurring_start_date,
+          last_occurred: nextDate,
+          recurring_next_date: getNextDate(nextDate, exp.frequency)
+        });
+
+        if (insertError) {
+          console.error('Error inserting recurring expense:', insertError.message);
+          break;
+        }
+      } else {
+        console.log(`Recurring expense for user ${exp.user_id} on ${nextDate} already exists, skipping insert.`);
       }
 
       // Update last_occurred and recurring_next_date for the original recurring expense
       const { error: updateError } = await supabase
         .from('expenses')
-        .update({ last_occurred: today, recurring_next_date: getNextDate(today, exp.frequency) })
+        .update({ last_occurred: nextDate, recurring_next_date: getNextDate(nextDate, exp.frequency) })
         .eq('id', exp.id);
 
       if (updateError) {
         console.error('Error updating last_occurred/recurring_next_date:', updateError.message);
+        break;
       } else {
-        console.log(`Recurring expense for user ${exp.user_id} added for ${today}, next on ${getNextDate(today, exp.frequency)}`);
+        console.log(`Recurring expense for user ${exp.user_id} processed for ${nextDate}, next on ${getNextDate(nextDate, exp.frequency)}`);
       }
-    } else {
-      // Always update recurring_next_date for visibility
+      lastDate = nextDate;
+      nextDate = getNextDate(lastDate, exp.frequency);
+    }
+    // Always update recurring_next_date for visibility if no catch-up was needed
+    if (lastDate === exp.last_occurred) {
       await supabase
         .from('expenses')
         .update({ recurring_next_date: nextDate })
@@ -91,6 +117,12 @@ async function processRecurringExpenses() {
 }
 
 processRecurringExpenses().then(() => {
-  console.log('Recurring expenses processing complete.');
-  process.exit(0);
-}); 
+  console.log('Initial recurring expenses processing complete.');
+});
+
+// Run every 24 hours (86,400,000 ms)
+setInterval(() => {
+  processRecurringExpenses().then(() => {
+    console.log('Recurring expenses processing complete.');
+  });
+}, 24 * 60 * 60 * 1000); 

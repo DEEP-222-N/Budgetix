@@ -14,7 +14,8 @@ const AddExpense = () => {
     description: '',
     date: new Date().toISOString().split('T')[0],
     paymentMethod: '',
-    frequency: '' // Add frequency to form state
+    frequency: '', // Add frequency to form state
+    recurring_end_date: '' // Add recurring_end_date to form state
   });
   const [showSuccess, setShowSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -187,6 +188,7 @@ const AddExpense = () => {
         recurring_start_date: isRecurring ? today : null,
         last_occurred: isRecurring ? today : null,
         recurring_next_date: isRecurring ? getNextDate(today, formData.frequency) : null,
+        recurring_end_date: isRecurring && formData.recurring_end_date ? formData.recurring_end_date : null,
         user_id: user.id // Use the authenticated user's ID from AuthContext
       };
       
@@ -230,7 +232,8 @@ const AddExpense = () => {
         description: '',
         date: new Date().toISOString().split('T')[0],
         paymentMethod: 'Credit Card',
-        frequency: ''
+        frequency: '',
+        recurring_end_date: ''
       });
       
       // Hide success message after 3 seconds
@@ -366,6 +369,22 @@ const AddExpense = () => {
             ))}
           </select>
         </div>
+        {/* Recurring End Date Picker - only show if frequency is selected */}
+        {formData.frequency && (
+          <div className="form-group">
+            <label htmlFor="recurring_end_date">
+              <i className="far fa-calendar-times"></i> Recurring End Date
+            </label>
+            <input
+              type="date"
+              id="recurring_end_date"
+              name="recurring_end_date"
+              value={formData.recurring_end_date}
+              onChange={handleChange}
+              min={formData.date}
+            />
+          </div>
+        )}
         
         <div className="form-group">
           <label htmlFor="description">
