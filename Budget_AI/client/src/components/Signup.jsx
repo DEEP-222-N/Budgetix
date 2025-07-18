@@ -6,12 +6,13 @@ import budgetixLogo from '../assets/image-removebg-preview (4).png';
 const bgImageUrl = 'https://images.unsplash.com/photo-1450101499163-c8848c66ca85?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1740&q=80';
 
 const Signup = () => {
-  const { signup } = useAuth();
+  const { signup, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState({ username: '', email: '', password: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [googleLoading, setGoogleLoading] = useState(false);
 
   const handleChange = (e) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -109,6 +110,22 @@ const Signup = () => {
           </div>
           <button type="submit" className="w-full bg-blue-500 text-white py-2 rounded hover:bg-blue-600 transition" disabled={loading}>
             {loading ? 'Signing Up...' : 'Sign Up'}
+          </button>
+          {/* Google Signup Button */}
+          <button
+            type="button"
+            className="w-full flex items-center justify-center gap-2 bg-white border border-gray-300 rounded-lg py-2 mt-2 text-gray-700 font-semibold hover:bg-gray-50 transition disabled:opacity-60"
+            onClick={async () => {
+              setGoogleLoading(true);
+              setError("");
+              const { success, error } = await loginWithGoogle();
+              setGoogleLoading(false);
+              if (!success) setError(error?.message || 'Google sign up failed.');
+            }}
+            disabled={googleLoading}
+          >
+            <span style={{fontSize: '1.3em'}}>🔵</span> {/* Google icon substitute */}
+            {googleLoading ? 'Signing up with Google...' : 'Sign up with Google'}
           </button>
           <div className="text-center mt-4">
             <span className="text-blue-100">Already have an account?</span>

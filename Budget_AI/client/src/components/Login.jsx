@@ -5,13 +5,14 @@ import SignupModal from './SignupModal';
 
 const Login = () => {
   // Use AuthContext for authentication
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
   const [showSignupModal, setShowSignupModal] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   
   // Clear messages when opening/closing modal
   useEffect(() => {
@@ -126,6 +127,21 @@ const Login = () => {
             {loading ? 'Logging in...' : 'Login'}
           </button>
         </form>
+        {/* Google Login Button */}
+        <button
+          className="w-full flex items-center justify-center gap-2 bg-white border border-gray-300 rounded-lg py-2 mt-2 text-gray-700 font-semibold hover:bg-gray-50 transition disabled:opacity-60"
+          onClick={async () => {
+            setGoogleLoading(true);
+            setError("");
+            const { success, error } = await loginWithGoogle();
+            setGoogleLoading(false);
+            if (!success) setError(error?.message || 'Google login failed.');
+          }}
+          disabled={googleLoading}
+        >
+          <span style={{fontSize: '1.3em'}}>🔵</span> {/* Google icon substitute */}
+          {googleLoading ? 'Signing in with Google...' : 'Sign in with Google'}
+        </button>
         <div className="text-center mt-4">
           <span className="text-gray-600">Don't have an account?{' '}
             <button

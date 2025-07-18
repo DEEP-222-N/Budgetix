@@ -28,6 +28,9 @@ const ExpenseCard = ({ expense }) => {
       <div className="flex items-center space-x-3">
         <div className={`px-3 py-1 rounded-full text-sm font-medium ${getCategoryColor(expense.category)}`}>
           {expense.category}
+          {expense.is_recurring && (
+            <span className="ml-2 px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs font-semibold border border-blue-200 align-middle">Recurring</span>
+          )}
         </div>
         <div>
           <p className="font-medium text-gray-900">{expense.description}</p>

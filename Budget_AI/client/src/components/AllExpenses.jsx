@@ -96,14 +96,25 @@ const AllExpenses = () => {
   // Start editing
   function handleStartEdit(expense) {
     setEditingId(expense.id);
-    setEditForm({ description: expense.description, amount: expense.amount });
+    setEditForm({
+      description: expense.description,
+      amount: expense.amount,
+      recurring_end_date: expense.recurring_end_date || ''
+    });
   }
 
   // Save edit
   async function handleSaveEdit(id) {
-    const { error } = await supabase.from('expenses').update({ description: editForm.description, amount: parseFloat(editForm.amount) }).eq('id', id);
+    const updateData = {
+      description: editForm.description,
+      amount: parseFloat(editForm.amount)
+    };
+    if (editForm.recurring_end_date !== undefined) {
+      updateData.recurring_end_date = editForm.recurring_end_date;
+    }
+    const { error } = await supabase.from('expenses').update(updateData).eq('id', id);
     if (!error) {
-      setExpenses(expenses => expenses.map(e => e.id === id ? { ...e, description: editForm.description, amount: parseFloat(editForm.amount) } : e));
+      setExpenses(expenses => expenses.map(e => e.id === id ? { ...e, ...updateData } : e));
       setEditingId(null);
       
       // Update total expenses in financial_overview after editing
@@ -226,6 +237,19 @@ const AllExpenses = () => {
                         placeholder="Amount"
                       />
                     </div>
+                    {/* Recurring End Date field for recurring expenses */}
+                    {expense.is_recurring && (
+                      <div className="w-56">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Recurring End Date</label>
+                        <input
+                          className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                          type="date"
+                          value={editForm.recurring_end_date || ''}
+                          onChange={e => setEditForm(f => ({ ...f, recurring_end_date: e.target.value }))}
+                          placeholder="Recurring End Date"
+                        />
+                      </div>
+                    )}
                     <div className="flex gap-2 self-end">
                       <button
                         className="px-4 py-2 rounded-lg bg-green-600 text-white font-medium text-sm shadow hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-400 transition"
@@ -247,6 +271,9 @@ const AllExpenses = () => {
                   <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-3 sm:mb-0">
                     <div className={`${getCategoryColor(expense.category)} px-4 py-2 rounded-full text-sm font-medium w-fit`}>
                       {expense.category}
+                      {expense.is_recurring && (
+                        <span className="ml-2 px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs font-semibold border border-blue-200 align-middle">Recurring</span>
+                      )}
                     </div>
                     <div>
                       <p className="font-medium text-gray-900 text-lg">{expense.description}</p>
