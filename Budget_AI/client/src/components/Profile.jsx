@@ -244,12 +244,13 @@ const Profile = () => {
             <option value="CAD">CAD (C$)</option>
             <option value="INR">INR (₹)</option>
           </select>
+
+          <p className="text-xs text-gray-500 mt-1">Choose the currency you want to use for your budget.</p>
           {/* BudgeXP Points - show here */}
           <div className="mt-4 mb-2">
             <span className="block text-sm font-medium text-purple-700">BudgeXP Points</span>
             <span className="text-xl font-bold text-purple-800">{budgexpPoints}</span>
           </div>
-          <p className="text-xs text-gray-500 mt-1">Choose the currency you want to use for your budget.</p>
         </div>
 
         {/* Financial Overview - locked/blurred if needed */}

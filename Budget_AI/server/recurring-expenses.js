@@ -51,6 +51,11 @@ async function processRecurringExpenses() {
     while (nextDate && nextDate <= today) {
       // Stop if recurring_end_date is set and nextDate is after it
       if (exp.recurring_end_date && nextDate > exp.recurring_end_date) {
+        // Mark the original recurring expense as inactive
+        await supabase
+          .from('expenses')
+          .update({ is_recurring: false })
+          .eq('id', exp.id);
         break;
       }
       // Check if an expense for nextDate already exists for this user/category
@@ -64,6 +69,22 @@ async function processRecurringExpenses() {
 
       if (checkError) {
         console.error('Error checking for existing expense:', checkError.message);
+        break;
+      }
+
+      // Delete any extra generated recurring expenses that exceed the end date
+      if (exp.recurring_end_date && nextDate > exp.recurring_end_date) {
+        if (existingExpenses && existingExpenses.length > 0) {
+          for (const e of existingExpenses) {
+            await supabase.from('expenses').delete().eq('id', e.id);
+            console.log(`Deleted extra recurring expense with id ${e.id} for user ${exp.user_id} on ${nextDate}`);
+          }
+        }
+        // Mark the original recurring expense as inactive
+        await supabase
+          .from('expenses')
+          .update({ is_recurring: false })
+          .eq('id', exp.id);
         break;
       }
 
@@ -116,8 +137,59 @@ async function processRecurringExpenses() {
   }
 }
 
-processRecurringExpenses().then(() => {
-  console.log('Initial recurring expenses processing complete.');
+// One-time cleanup: Delete extra recurring expenses after their end date
+async function cleanupExtraRecurringExpenses() {
+  const { data: recurringExpenses, error } = await supabase
+    .from('expenses')
+    .select('*')
+    .eq('is_recurring', true);
+
+  if (error) {
+    console.error('Error fetching recurring expenses for cleanup:', error.message);
+    return;
+  }
+
+  for (const exp of recurringExpenses) {
+    if (exp.recurring_end_date) {
+      // Delete all recurring expenses for this user/category after the end date
+      const { data: extraExpenses, error: fetchError } = await supabase
+        .from('expenses')
+        .select('id, date')
+        .eq('user_id', exp.user_id)
+        .eq('category', exp.category)
+        .eq('is_recurring', true)
+        .gt('date', exp.recurring_end_date);
+
+      if (fetchError) {
+        console.error('Error fetching extra recurring expenses:', fetchError.message);
+        continue;
+      }
+
+      if (extraExpenses && extraExpenses.length > 0) {
+        for (const e of extraExpenses) {
+          await supabase.from('expenses').delete().eq('id', e.id);
+          console.log(`Cleanup: Deleted extra recurring expense with id ${e.id} for user ${exp.user_id} on ${e.date}`);
+        }
+      }
+
+      // Mark the original recurring expense as inactive if its end date has passed
+      const today = new Date().toISOString().split('T')[0];
+      if (today > exp.recurring_end_date) {
+        await supabase
+          .from('expenses')
+          .update({ is_recurring: false })
+          .eq('id', exp.id);
+        console.log(`Cleanup: Marked recurring expense with id ${exp.id} as inactive (end date passed)`);
+      }
+    }
+  }
+}
+
+// Run cleanup before processing recurring expenses
+cleanupExtraRecurringExpenses().then(() => {
+  processRecurringExpenses().then(() => {
+    console.log('Initial recurring expenses processing complete.');
+  });
 });
 
 // Run every 24 hours (86,400,000 ms)
