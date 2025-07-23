@@ -24,6 +24,8 @@ const BudgetManager = () => {
   const { currency, setCurrency, symbol } = useCurrency();
   const { monthlyBudget, setMonthlyBudget } = useBudget();
   const [aiPrompt, setAiPrompt] = useState('');
+  const [isProcessingAI, setIsProcessingAI] = useState(false);
+  const [aiResponse, setAiResponse] = useState('');
   const [settings, setSettings] = useState({
     overspendingAlert: 90,
     currency: 'USD',
@@ -89,6 +91,7 @@ const BudgetManager = () => {
       setLoading(true);
       setError(null);
       try {
+        // Temporarily use old budget system until migration is applied
         const { data: budgetData, error: budgetError } = await supabase
           .from('budgets')
           .select('*')
@@ -111,16 +114,18 @@ const BudgetManager = () => {
           spentMap[exp.category] += Number(exp.amount) || 0;
         });
         if (budgetData) {
+          console.log('✅ Loaded monthly budget data:', budgetData);
+          console.log('📅 Current month:', budgetData.month);
           setMonthlyBudget(budgetData.monthly_budget_total);
           setCategoryBudgets(allCategories.map(name => {
-            const dbName = name.toLowerCase().replace(/ and /gi, '_and_').replace(/ /g, '_');
+            const dbName = getCategoryColumnName(name);
             return {
               name,
               budget: budgetData[dbName] || 200,
               current: spentMap[name] || 0
             };
           }));
-          setCategoryBudgetInputs(allCategories.map(name => String(budgetData[name.toLowerCase().replace(/ and /gi, '_and_').replace(/ /g, '_')] || 200)));
+          setCategoryBudgetInputs(allCategories.map(name => String(budgetData[getCategoryColumnName(name)] || 200)));
         } else {
           setCategoryBudgets(prev =>
             prev.map(cat => ({
@@ -163,6 +168,25 @@ const BudgetManager = () => {
     ));
     setCategoryBudgetInputs(prev => prev.map((v, i) => i === index ? undefined : v));
   };
+  // Create a mapping function to convert category names to database column names
+  const getCategoryColumnName = (categoryName) => {
+    const mapping = {
+      'Food': 'food',
+      'Transportation and Fuel': 'transportation_and_fuel',
+      'Entertainment': 'entertainment',
+      'Housing': 'housing',
+      'Utilities': 'utilities',
+      'Grocery': 'grocery',
+      'Healthcare': 'healthcare',
+      'Education': 'education',
+      'Shopping': 'shopping',
+      'Personal Care': 'personal_care',
+      'Travel': 'travel',
+      'Other': 'other'
+    };
+    return mapping[categoryName] || categoryName.toLowerCase().replace(/ /g, '_');
+  };
+
   const handleSave = async () => {
     if (!user || !supabase) return;
     // Validation: If achievableGoal is filled, monthsToAchieveGoal must be filled
@@ -173,30 +197,71 @@ const BudgetManager = () => {
     setIsSaving(true);
     setError(null);
     try {
-      const budgetData = {};
+      // Prepare budget updates for the current month
+      const budgetUpdates = {};
       categoryBudgets.forEach(cat => {
-        const dbName = cat.name.toLowerCase().replace(/ and /gi, '_and_').replace(/ /g, '_');
-        budgetData[dbName] = Number(cat.budget) || 0;
+        const dbName = getCategoryColumnName(cat.name);
+        // Ensure budget values are valid numbers
+        const budgetValue = Number(cat.budget);
+        budgetUpdates[dbName] = isNaN(budgetValue) ? 0 : budgetValue;
       });
-      budgetData.monthly_budget_total = Number(monthlyBudget) || 0;
-      budgetData.user_id = user.id;
-      budgetData.updated_at = new Date().toISOString();
-      // Add new fields with logic
-      budgetData.monthly_investment_goal = monthlyInvestmentGoal ? Number(monthlyInvestmentGoal) : 0;
-      budgetData.monthly_savings_goal = monthlySavingsGoal ? Number(monthlySavingsGoal) : 0;
-      budgetData.achievable_goal = achievableGoal || null;
-      budgetData.months_to_achieve_goal = monthsToAchieveGoal ? Number(monthsToAchieveGoal) : (achievableGoal ? null : 0);
-      const { error: upsertError } = await supabase
+      budgetUpdates.monthly_budget_total = Number(monthlyBudget) || 0;
+      // Add new fields with logic and ensure they are valid numbers
+      budgetUpdates.monthly_investment_goal = monthlyInvestmentGoal ? Number(monthlyInvestmentGoal) : 0;
+      budgetUpdates.monthly_savings_goal = monthlySavingsGoal ? Number(monthlySavingsGoal) : 0;
+      budgetUpdates.achievable_goal = achievableGoal || null;
+      budgetUpdates.months_to_achieve_goal = monthsToAchieveGoal ? Number(monthsToAchieveGoal) : (achievableGoal ? null : 0);
+      
+      // Log the data being sent to help with debugging
+      console.log('Saving monthly budget data:', budgetUpdates);
+      
+      // Temporarily use old budget system until migration is applied
+      budgetUpdates.user_id = user.id;
+      budgetUpdates.updated_at = new Date().toISOString();
+      
+      // Try to update existing budget first, then insert if it doesn't exist
+      let updateResult, upsertError;
+      
+      // First, try to update existing budget
+      const { data: existingBudget } = await supabase
         .from('budgets')
-        .upsert(budgetData, { onConflict: 'user_id' });
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (existingBudget) {
+        // Update existing budget
+        const { data, error } = await supabase
+          .from('budgets')
+          .update(budgetUpdates)
+          .eq('user_id', user.id);
+        updateResult = data;
+        upsertError = error;
+      } else {
+        // Insert new budget
+        const { data, error } = await supabase
+          .from('budgets')
+          .insert(budgetUpdates);
+        updateResult = data;
+        upsertError = error;
+      }
+      
+      console.log('📤 Update result:', updateResult);
+      console.log('❌ Update error:', upsertError);
+      
       if (upsertError) {
-        setError('Failed to save budget data');
+        console.error('Budget save error:', upsertError);
+        setError(`Failed to save budget data: ${upsertError.message || 'Database error'}`);
         return;
       }
+      
+      console.log('✅ Budget updated successfully (old system)');
+      
       setShowSuccess(true);
       setTimeout(() => setShowSuccess(false), 3000);
     } catch (err) {
-      setError('An unexpected error occurred while saving');
+      console.error('Unexpected error saving budget:', err);
+      setError(`An unexpected error occurred: ${err.message || 'Unknown error'}`);
     } finally {
       setIsSaving(false);
     }
@@ -235,6 +300,97 @@ const BudgetManager = () => {
     }
   };
 
+  // AI Assistant function
+  const handleAIPrompt = async () => {
+    console.log('🤖 AI Prompt Handler Called');
+    console.log('AI Prompt:', aiPrompt);
+    console.log('User object:', user);
+    console.log('User ID:', user?.id);
+    
+    if (!aiPrompt.trim()) {
+      console.log('❌ No prompt provided');
+      setError('Please enter a prompt');
+      return;
+    }
+    
+    if (!user) {
+      console.log('❌ No user object available');
+      setError('User not authenticated');
+      return;
+    }
+    
+    if (!user.id) {
+      console.log('❌ User ID not available');
+      setError('User ID not available');
+      return;
+    }
+    
+    console.log('✅ All checks passed, proceeding with AI request');
+    
+    setIsProcessingAI(true);
+    setError(null);
+    setAiResponse('');
+    
+    try {
+      console.log('📤 Sending AI request:', { prompt: aiPrompt, userId: user.id });
+      
+      const response = await fetch('/api/ai/process-prompt', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: aiPrompt,
+          userId: user.id
+        })
+      });
+      
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+      
+      // Check if response is actually JSON
+      const contentType = response.headers.get('content-type');
+      console.log('Content-Type:', contentType);
+      
+      if (!contentType || !contentType.includes('application/json')) {
+        const textResponse = await response.text();
+        console.error('Non-JSON response received:', textResponse);
+        throw new Error('Server returned non-JSON response: ' + textResponse.substring(0, 100));
+      }
+      
+      const data = await response.json();
+      console.log('Parsed response data:', data);
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to process AI prompt');
+      }
+      
+      if (data.success) {
+        setAiResponse(data.message);
+        setShowSuccess(true);
+        
+        // Refresh the budget data to show updates
+        window.location.reload();
+      } else {
+        setError(data.message || 'AI could not process your request');
+      }
+      
+    } catch (err) {
+      console.error('AI Processing Error:', err);
+      setError(`AI Error: ${err.message}`);
+    } finally {
+      setIsProcessingAI(false);
+    }
+  };
+
+  // Handle Enter key press in AI prompt
+  const handleAIPromptKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleAIPrompt();
+    }
+  };
+
   // Check if all data is loaded (after all hooks)
   const isDataLoaded = !loading && user;
 
@@ -257,17 +413,59 @@ const BudgetManager = () => {
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Budget Manager</h1>
         <p className="text-gray-600">Manage your budget goals and category allocations</p>
       </div>
+      {/* TEST AI BUTTON - TEMPORARY */}
+      <div className="mb-4 p-4 bg-yellow-100 border border-yellow-300 rounded-lg">
+        <button 
+          onClick={() => {
+            console.log('🧪 TEST BUTTON CLICKED');
+            console.log('Current aiPrompt state:', aiPrompt);
+            setAiPrompt('test prompt from button');
+            handleAIPrompt();
+          }}
+          className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 mr-4"
+        >
+          🧪 TEST AI (Click Me!)
+        </button>
+        <span className="text-sm text-gray-600">This is a test button to check if AI handler works</span>
+      </div>
       {/* AI Assistant Prompt */}
       <div className="mb-8">
         <label htmlFor="aiPrompt" className="block text-lg font-bold text-purple-900 mb-2">AI Assistant Prompt</label>
-        <textarea
-          id="aiPrompt"
-          value={aiPrompt}
-          onChange={e => setAiPrompt(e.target.value)}
-          rows={4}
-          className="w-full p-4 border-2 border-purple-300 rounded-lg shadow focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg resize-vertical min-h-[100px]"
-          placeholder="Type your request or question for the AI assistant..."
-        />
+        <div className="relative">
+          <textarea
+            id="aiPrompt"
+            value={aiPrompt}
+            onChange={e => setAiPrompt(e.target.value)}
+            onKeyPress={handleAIPromptKeyPress}
+            rows={4}
+            className="w-full p-4 border-2 border-purple-300 rounded-lg shadow focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg resize-vertical min-h-[100px] pr-24"
+            placeholder="Try: 'Set my food budget to 500' or 'I spent 50 on groceries today' or 'Change my monthly budget to 3000'"
+            disabled={isProcessingAI}
+          />
+          <button
+            onClick={handleAIPrompt}
+            disabled={isProcessingAI || !aiPrompt.trim()}
+            className="absolute bottom-4 right-4 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+          >
+            {isProcessingAI ? 'Processing...' : 'Send'}
+          </button>
+        </div>
+        {aiResponse && (
+          <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+            <p className="text-green-800 font-medium">AI Assistant:</p>
+            <p className="text-green-700">{aiResponse}</p>
+          </div>
+        )}
+        <div className="mt-2 text-sm text-gray-600">
+          <p><strong>Examples:</strong></p>
+          <ul className="list-disc list-inside space-y-1 mt-1">
+            <li>"Set my food budget to 500"</li>
+            <li>"I spent 50 on groceries today"</li>
+            <li>"Change my monthly budget to 3000"</li>
+            <li>"My shopping budget should be 200 and entertainment 150"</li>
+            <li>"Set my savings goal to 1000"</li>
+          </ul>
+        </div>
       </div>
       {/* Toast Notifications */}
       <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-50 w-full flex justify-center pointer-events-none">

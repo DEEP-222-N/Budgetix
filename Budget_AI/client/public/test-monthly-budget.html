@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Monthly Budget Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Monthly Budget System Test</h1>
+    <div id="status">Testing connection...</div>
+    <div id="results"></div>
+    
+    <script>
+        // Initialize Supabase (using your environment variables)
+        const supabaseUrl = 'https://agchhwydoccsdnwuqwtq.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFnY2hod3lkb2Njc2Rud3Vxd3RxIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NDIyMzk2NCwiZXhwIjoyMDU5Nzk5OTY0fQ.nCLX75cAcCfz-VhD1P5R2nzOBjiMusHDbrOYV5zg-c0';
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+        
+        async function testMonthlyBudget() {
+            const statusDiv = document.getElementById('status');
+            const resultsDiv = document.getElementById('results');
+            
+            try {
+                statusDiv.innerHTML = '🔍 Testing monthly budget functions...';
+                
+                // Test user ID (you can replace with your actual user ID)
+                const testUserId = '23d27e22-d806-4cb1-9e82-9576e9be6f76';
+                
+                // Test 1: Get or create monthly budget
+                console.log('Testing get_or_create_monthly_budget...');
+                const { data: budgetData, error: budgetError } = await supabase
+                    .rpc('get_or_create_monthly_budget', { p_user_id: testUserId });
+                
+                if (budgetError) {
+                    throw new Error(`Budget function error: ${budgetError.message}`);
+                }
+                
+                console.log('Budget data:', budgetData);
+                
+                // Test 2: Update monthly budget
+                console.log('Testing update_monthly_budget...');
+                const testUpdates = {
+                    food: 600,
+                    entertainment: 300
+                };
+                
+                const { data: updateData, error: updateError } = await supabase
+                    .rpc('update_monthly_budget', { 
+                        p_user_id: testUserId, 
+                        p_updates: testUpdates 
+                    });
+                
+                if (updateError) {
+                    throw new Error(`Update function error: ${updateError.message}`);
+                }
+                
+                console.log('Update result:', updateData);
+                
+                // Display results
+                statusDiv.innerHTML = '✅ Monthly budget system is working!';
+                resultsDiv.innerHTML = `
+                    <h3>Test Results:</h3>
+                    <div style="background: #f0f9ff; padding: 15px; border-radius: 8px; margin: 10px 0;">
+                        <h4>📊 Current Month Budget:</h4>
+                        <pre>${JSON.stringify(budgetData, null, 2)}</pre>
+                    </div>
+                    <div style="background: #f0fdf4; padding: 15px; border-radius: 8px; margin: 10px 0;">
+                        <h4>✅ Update Test Results:</h4>
+                        <pre>${JSON.stringify(updateData, null, 2)}</pre>
+                    </div>
+                    <div style="background: #fffbeb; padding: 15px; border-radius: 8px; margin: 10px 0;">
+                        <h4>🗓️ Monthly Logic:</h4>
+                        <p><strong>Current Month:</strong> ${budgetData?.[0]?.month || 'Not set'}</p>
+                        <p><strong>Food Budget:</strong> $${updateData?.[0]?.food || 0}</p>
+                        <p><strong>Entertainment Budget:</strong> $${updateData?.[0]?.entertainment || 0}</p>
+                    </div>
+                `;
+                
+            } catch (error) {
+                console.error('Test failed:', error);
+                statusDiv.innerHTML = '❌ Test failed!';
+                resultsDiv.innerHTML = `
+                    <div style="background: #fef2f2; padding: 15px; border-radius: 8px; color: #dc2626;">
+                        <h4>Error:</h4>
+                        <p>${error.message}</p>
+                        <h4>Possible Issues:</h4>
+                        <ul>
+                            <li>Migration not applied to database</li>
+                            <li>Functions not created properly</li>
+                            <li>User ID not found</li>
+                            <li>Database connection issues</li>
+                        </ul>
+                    </div>
+                `;
+            }
+        }
+        
+        // Run test when page loads
+        testMonthlyBudget();
+    </script>
+</body>
+</html>
