@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Test</title>
+</head>
+<body>
+    <h1>AI Assistant Test</h1>
+    <input type="text" id="prompt" placeholder="Enter your prompt" style="width: 300px;">
+    <button onclick="testAI()">Test AI</button>
+    <div id="result"></div>
+
+    <script>
+        async function testAI() {
+            const prompt = document.getElementById('prompt').value;
+            const resultDiv = document.getElementById('result');
+            
+            console.log('Testing AI with prompt:', prompt);
+            
+            try {
+                // Test the proxy first
+                console.log('Testing /api/test endpoint...');
+                const testResponse = await fetch('/api/test');
+                console.log('Test response status:', testResponse.status);
+                const testData = await testResponse.json();
+                console.log('Test data:', testData);
+                
+                // Now test AI
+                console.log('Testing AI endpoint...');
+                const response = await fetch('/api/ai/process-prompt', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        prompt: prompt,
+                        userId: 'test-user-123'
+                    })
+                });
+                
+                console.log('AI Response status:', response.status);
+                const data = await response.json();
+                console.log('AI Response data:', data);
+                
+                resultDiv.innerHTML = '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+                
+            } catch (error) {
+                console.error('Error:', error);
+                resultDiv.innerHTML = '<p style="color: red;">Error: ' + error.message + '</p>';
+            }
+        }
+    </script>
+</body>
+</html>
