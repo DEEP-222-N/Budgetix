@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts';
-import { DollarSign, TrendingUp, Target, AlertCircle, Brain } from 'lucide-react';
+import { DollarSign, TrendingUp, Target, AlertCircle } from 'lucide-react';
 import ExpenseCard from './ExpenseCard';
 import BudgetProgress from './BudgetProgress';
 import { useAuth } from '../context/AuthContext';
@@ -325,24 +325,6 @@ const Dashboard = () => {
               <Line type="monotone" dataKey="budget" stroke="#F59E0B" name="Budget" strokeWidth={3} dot={false} />
             </LineChart>
           </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* AI Recommendations */}
-      <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
-        <div className="flex items-center space-x-2 mb-4">
-          <Brain className="h-6 w-6 text-purple-600" />
-          <h3 className="text-lg font-semibold">AI Recommendations</h3>
-        </div>
-        <div className="space-y-3">
-          {aiRecommendations.map((recommendation, index) => (
-            <div key={index} className="flex items-start space-x-3 p-3 bg-purple-50 rounded-lg">
-              <div className="bg-purple-100 p-1 rounded-full mt-1">
-                <AlertCircle className="h-4 w-4 text-purple-600" />
-              </div>
-              <p className="text-gray-700">{recommendation}</p>
-            </div>
-          ))}
         </div>
       </div>
 

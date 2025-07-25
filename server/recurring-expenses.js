@@ -58,8 +58,26 @@ async function processRecurringExpenses() {
 
   const today = new Date().toISOString().split('T')[0];
   for (const exp of recurringExpenses) {
+    // Skip processing if end date has already passed
+    if (exp.recurring_end_date && today > exp.recurring_end_date) {
+      // Mark the recurring expense as inactive if end date has passed
+      await supabase
+        .from('expenses')
+        .update({ is_recurring: false })
+        .eq('id', exp.id);
+      console.log(`Recurring expense ${exp.id} has reached its end date (${exp.recurring_end_date}) and has been marked as inactive`);
+      continue;
+    }
+
     let lastDate = exp.last_occurred;
     let nextDate = getNextDate(lastDate, exp.frequency);
+    
+    // Skip if there's no next date or if next date is in the future
+    if (!nextDate || nextDate > today) {
+      continue;
+    }
+
+    // Process recurring expenses up to today or end date
     while (nextDate && nextDate <= today) {
       // Stop if recurring_end_date is set and nextDate is after it
       if (exp.recurring_end_date && nextDate > exp.recurring_end_date) {
@@ -68,6 +86,7 @@ async function processRecurringExpenses() {
           .from('expenses')
           .update({ is_recurring: false })
           .eq('id', exp.id);
+        console.log(`Recurring expense ${exp.id} has reached its end date (${exp.recurring_end_date}) and has been marked as inactive`);
         break;
       }
       // Check if an expense for nextDate already exists for this user/category

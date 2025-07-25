@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Target, Percent, Calendar, AlertCircle, Save, X } from 'lucide-react';
+import { Target, Percent, Calendar, AlertCircle, Save, X, Brain, Sparkles, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { useBudget } from '../context/BudgetContext';
@@ -24,6 +24,9 @@ const BudgetManager = () => {
   const { currency, setCurrency, symbol } = useCurrency();
   const { monthlyBudget, setMonthlyBudget } = useBudget();
   const [aiPrompt, setAiPrompt] = useState('');
+  const [aiSuggestion, setAiSuggestion] = useState('');
+  const [isLoadingAi, setIsLoadingAi] = useState(false);
+  const [aiError, setAiError] = useState('');
   const [isProcessingAI, setIsProcessingAI] = useState(false);
   const [aiResponse, setAiResponse] = useState('');
   const [settings, setSettings] = useState({
@@ -273,18 +276,26 @@ const BudgetManager = () => {
     setIsSaving(true);
     setError(null);
     try {
+      const currentDate = new Date();
+      const currentMonth = currentDate.toISOString().slice(0, 7); // Gets YYYY-MM format
+      
       const budgetSettingsData = {
         user_id: user.id,
+        month: currentMonth, // Add current month to match unique constraint
         monthly_budget_total: Number(monthlyBudgetInput !== undefined ? monthlyBudgetInput : monthlyBudget) || 0,
         monthly_savings_goal: monthlySavingsGoal ? Number(monthlySavingsGoal) : 0,
         monthly_investment_goal: monthlyInvestmentGoal ? Number(monthlyInvestmentGoal) : 0,
         achievable_goal: achievableGoal || null,
         months_to_achieve_goal: monthsToAchieveGoal ? Number(monthsToAchieveGoal) : null,
-        updated_at: new Date().toISOString(),
+        updated_at: currentDate.toISOString(),
       };
+      
       const { error: upsertError } = await supabase
         .from('budgets')
-        .upsert(budgetSettingsData, { onConflict: 'user_id' });
+        .upsert(budgetSettingsData, { 
+          onConflict: 'user_id,month', // Update onConflict to match unique constraint
+          ignoreDuplicates: false 
+        });
       if (upsertError) {
         setError('Failed to save budget settings');
         setShowError(true);
@@ -300,94 +311,45 @@ const BudgetManager = () => {
     }
   };
 
-  // AI Assistant function
-  const handleAIPrompt = async () => {
-    console.log('🤖 AI Prompt Handler Called');
-    console.log('AI Prompt:', aiPrompt);
-    console.log('User object:', user);
-    console.log('User ID:', user?.id);
+  const handleAiSuggestion = async (e) => {
+    e.preventDefault();
+    if (!aiPrompt.trim()) return;
     
-    if (!aiPrompt.trim()) {
-      console.log('❌ No prompt provided');
-      setError('Please enter a prompt');
-      return;
-    }
-    
-    if (!user) {
-      console.log('❌ No user object available');
-      setError('User not authenticated');
-      return;
-    }
-    
-    if (!user.id) {
-      console.log('❌ User ID not available');
-      setError('User ID not available');
-      return;
-    }
-    
-    console.log('✅ All checks passed, proceeding with AI request');
-    
-    setIsProcessingAI(true);
-    setError(null);
-    setAiResponse('');
+    setIsLoadingAi(true);
+    setAiError('');
+    setAiSuggestion('');
     
     try {
-      console.log('📤 Sending AI request:', { prompt: aiPrompt, userId: user.id });
-      
-      const response = await fetch('/api/ai/process-prompt', {
+      console.log('Sending request to AI endpoint with prompt:', aiPrompt);
+      const response = await fetch('http://localhost:5000/api/ai/suggest-budget', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          prompt: aiPrompt,
+          prompt: aiPrompt.trim(),
           userId: user.id
-        })
+        }),
       });
       
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
-      
-      // Check if response is actually JSON
-      const contentType = response.headers.get('content-type');
-      console.log('Content-Type:', contentType);
-      
-      if (!contentType || !contentType.includes('application/json')) {
-        const textResponse = await response.text();
-        console.error('Non-JSON response received:', textResponse);
-        throw new Error('Server returned non-JSON response: ' + textResponse.substring(0, 100));
-      }
-      
-      const data = await response.json();
-      console.log('Parsed response data:', data);
+      const responseData = await response.json();
       
       if (!response.ok) {
-        throw new Error(data.error || 'Failed to process AI prompt');
+        console.error('API Error Response:', responseData);
+        throw new Error(responseData.error || responseData.details || 'Failed to get suggestion');
       }
       
-      if (data.success) {
-        setAiResponse(data.message);
-        setShowSuccess(true);
-        
-        // Refresh the budget data to show updates
-        window.location.reload();
-      } else {
-        setError(data.message || 'AI could not process your request');
+      if (!responseData.success) {
+        throw new Error(responseData.error || 'Invalid response from server');
       }
       
+      console.log('AI Suggestion received:', responseData);
+      setAiSuggestion(responseData.suggestion || 'No suggestion provided');
     } catch (err) {
-      console.error('AI Processing Error:', err);
-      setError(`AI Error: ${err.message}`);
+      console.error('Error getting AI suggestion:', err);
+      setAiError(err.message || 'Failed to get suggestion. Please try again.');
     } finally {
-      setIsProcessingAI(false);
-    }
-  };
-
-  // Handle Enter key press in AI prompt
-  const handleAIPromptKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleAIPrompt();
+      setIsLoadingAi(false);
     }
   };
 
@@ -413,59 +375,66 @@ const BudgetManager = () => {
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Budget Manager</h1>
         <p className="text-gray-600">Manage your budget goals and category allocations</p>
       </div>
-      {/* TEST AI BUTTON - TEMPORARY */}
-      <div className="mb-4 p-4 bg-yellow-100 border border-yellow-300 rounded-lg">
-        <button 
-          onClick={() => {
-            console.log('🧪 TEST BUTTON CLICKED');
-            console.log('Current aiPrompt state:', aiPrompt);
-            setAiPrompt('test prompt from button');
-            handleAIPrompt();
-          }}
-          className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 mr-4"
-        >
-          🧪 TEST AI (Click Me!)
-        </button>
-        <span className="text-sm text-gray-600">This is a test button to check if AI handler works</span>
-      </div>
-      {/* AI Assistant Prompt */}
-      <div className="mb-8">
-        <label htmlFor="aiPrompt" className="block text-lg font-bold text-purple-900 mb-2">AI Assistant Prompt</label>
-        <div className="relative">
-          <textarea
-            id="aiPrompt"
-            value={aiPrompt}
-            onChange={e => setAiPrompt(e.target.value)}
-            onKeyPress={handleAIPromptKeyPress}
-            rows={4}
-            className="w-full p-4 border-2 border-purple-300 rounded-lg shadow focus:outline-none focus:ring-2 focus:ring-purple-500 text-lg resize-vertical min-h-[100px] pr-24"
-            placeholder="Try: 'Set my food budget to 500' or 'I spent 50 on groceries today' or 'Change my monthly budget to 3000'"
-            disabled={isProcessingAI}
-          />
-          <button
-            onClick={handleAIPrompt}
-            disabled={isProcessingAI || !aiPrompt.trim()}
-            className="absolute bottom-4 right-4 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
-          >
-            {isProcessingAI ? 'Processing...' : 'Send'}
-          </button>
+      {/* AI Budget Advisor Section */}
+      <div className="bg-white rounded-lg shadow p-6 mb-8">
+        <div className="flex items-center mb-4">
+          <Brain className="h-6 w-6 text-indigo-600 mr-2" />
+          <h2 className="text-xl font-semibold">AI Budget Advisor</h2>
         </div>
-        {aiResponse && (
-          <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-            <p className="text-green-800 font-medium">AI Assistant:</p>
-            <p className="text-green-700">{aiResponse}</p>
+        
+        <form onSubmit={handleAiSuggestion} className="mb-6">
+          <div className="mb-4">
+            <label htmlFor="goal" className="block text-sm font-medium text-gray-700 mb-2">
+              What's your financial goal? (e.g., "I want to buy a $300k car in 24 months")
+            </label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                id="goal"
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                className="flex-1 rounded-md border border-gray-300 px-4 py-2 focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="I want to buy a $300k car in 24 months..."
+                disabled={isLoadingAi}
+              />
+              <button
+                type="submit"
+                disabled={!aiPrompt.trim() || isLoadingAi}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoadingAi ? (
+                  <>
+                    <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="-ml-1 mr-2 h-4 w-4" />
+                    Get Suggestion
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </form>
+
+        {aiError && (
+          <div className="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-lg">
+            {aiError}
           </div>
         )}
-        <div className="mt-2 text-sm text-gray-600">
-          <p><strong>Examples:</strong></p>
-          <ul className="list-disc list-inside space-y-1 mt-1">
-            <li>"Set my food budget to 500"</li>
-            <li>"I spent 50 on groceries today"</li>
-            <li>"Change my monthly budget to 3000"</li>
-            <li>"My shopping budget should be 200 and entertainment 150"</li>
-            <li>"Set my savings goal to 1000"</li>
-          </ul>
-        </div>
+
+        {aiSuggestion && (
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <h3 className="font-medium text-gray-900 mb-2">Your Personalized Budget Plan</h3>
+            <div 
+              className="prose max-w-none text-gray-700"
+              dangerouslySetInnerHTML={{ 
+                __html: aiSuggestion.replace(/\n/g, '<br />')
+              }} 
+            />
+          </div>
+        )}
       </div>
       {/* Toast Notifications */}
       <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-50 w-full flex justify-center pointer-events-none">
@@ -494,107 +463,95 @@ const BudgetManager = () => {
           )}
         </div>
       </div>
-      {/* Budget Settings */}
+      {/* Combined Budget Settings and Categories */}
       <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-200 w-full mb-8">
         <div className="flex items-center space-x-3 mb-8">
           <Target className="h-7 w-7 text-blue-600" />
-          <h3 className="text-2xl font-extrabold text-gray-900 tracking-tight">Budget Settings</h3>
+          <h3 className="text-2xl font-extrabold text-gray-900 tracking-tight">Budget Management</h3>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-8">
-          {/* Left Column */}
-          <div className="space-y-6">
-            {/* Monthly Budget Goal */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Monthly Budget Goal</label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">{symbol}</span>
+        
+        {/* Budget Settings Section */}
+        <div className="mb-12">
+          <h4 className="text-lg font-semibold text-gray-800 mb-6 pb-2 border-b border-gray-200">Budget Settings</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+            {/* Left Column */}
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Monthly Budget Goal</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">{symbol}</span>
+                  <input
+                    type="text"
+                    value={monthlyBudgetInput !== undefined ? monthlyBudgetInput : (monthlyBudget === 0 ? '' : monthlyBudget)}
+                    onChange={e => handleMonthlyBudgetInputChange(e.target.value)}
+                    onBlur={handleMonthlyBudgetInputBlur}
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 hover:border-blue-400 transition align-middle"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Set your total spending goal for the month.</p>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Monthly Savings Goal</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">{symbol}</span>
+                  <input
+                    type="number"
+                    value={monthlySavingsGoal}
+                    onChange={e => setMonthlySavingsGoal(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50 hover:border-green-400 transition align-middle"
+                    placeholder="Enter your savings goal"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">How much do you want to save this month?</p>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Achievable Goal</label>
                 <input
                   type="text"
-                  value={monthlyBudgetInput !== undefined ? monthlyBudgetInput : (monthlyBudget === 0 ? '' : monthlyBudget)}
-                  onChange={e => handleMonthlyBudgetInputChange(e.target.value)}
-                  onBlur={handleMonthlyBudgetInputBlur}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 hover:border-blue-400 transition align-middle"
+                  value={achievableGoal}
+                  onChange={e => setAchievableGoal(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-gray-50 hover:border-purple-400 transition align-middle"
+                  placeholder="Describe your goal (e.g., Save for a new car)"
                 />
+                <p className="text-xs text-gray-500 mt-1">Describe a specific goal you want to achieve this month.</p>
               </div>
-              <p className="text-xs text-gray-500 mt-1">Set your total spending goal for the month.</p>
             </div>
-            {/* Monthly Savings Goal */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Monthly Savings Goal</label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">{symbol}</span>
+            {/* Right Column */}
+            <div className="space-y-6">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Monthly Investment Goal</label>
+                <div className="relative">
+                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">{symbol}</span>
+                  <input
+                    type="number"
+                    value={monthlyInvestmentGoal}
+                    onChange={e => setMonthlyInvestmentGoal(e.target.value)}
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent bg-gray-50 hover:border-yellow-400 transition align-middle"
+                    placeholder="Enter your investment goal"
+                  />
+                </div>
+                <p className="text-xs text-gray-500 mt-1">How much do you want to invest this month?</p>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Months to Achieve Goal</label>
                 <input
                   type="number"
-                  value={monthlySavingsGoal}
-                  onChange={e => setMonthlySavingsGoal(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50 hover:border-green-400 transition align-middle"
-                  placeholder="Enter your savings goal"
+                  value={monthsToAchieveGoal}
+                  onChange={e => setMonthsToAchieveGoal(e.target.value)}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 hover:border-blue-400 transition align-middle"
+                  placeholder="Enter number of months"
+                  min="1"
                 />
+                <p className="text-xs text-gray-500 mt-1">How many months do you plan to achieve your goal in?</p>
               </div>
-              <p className="text-xs text-gray-500 mt-1">How much do you want to save this month?</p>
-            </div>
-            {/* Achievable Goal */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Achievable Goal</label>
-              <input
-                type="text"
-                value={achievableGoal}
-                onChange={e => setAchievableGoal(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-gray-50 hover:border-purple-400 transition align-middle"
-                placeholder="Describe your goal (e.g., Save for a new car)"
-              />
-              <p className="text-xs text-gray-500 mt-1">Describe a specific goal you want to achieve this month.</p>
-            </div>
-          </div>
-          {/* Right Column */}
-          <div className="space-y-6">
-            {/* Monthly Investment Goal */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Monthly Investment Goal</label>
-              <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">{symbol}</span>
-                <input
-                  type="number"
-                  value={monthlyInvestmentGoal}
-                  onChange={e => setMonthlyInvestmentGoal(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent bg-gray-50 hover:border-yellow-400 transition align-middle"
-                  placeholder="Enter your investment goal"
-                />
-              </div>
-              <p className="text-xs text-gray-500 mt-1">How much do you want to invest this month?</p>
-            </div>
-            {/* Months to Achieve Goal */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">Months to Achieve Goal</label>
-              <input
-                type="number"
-                value={monthsToAchieveGoal}
-                onChange={e => setMonthsToAchieveGoal(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 hover:border-blue-400 transition align-middle"
-                placeholder="Enter number of months"
-                min="1"
-              />
-              <p className="text-xs text-gray-500 mt-1">How many months do you plan to achieve your goal in?</p>
             </div>
           </div>
         </div>
-        <div className="flex justify-end mt-8">
-          <button
-            className="px-6 py-3 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all duration-300"
-            onClick={handleBudgetSettingsSave}
-            disabled={isSaving}
-          >
-            {isSaving ? 'Saving...' : 'Save Budget Settings'}
-          </button>
-        </div>
-      </div>
-      {/* Category Budgets */}
-      <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 w-full">
-        <div className="flex items-center space-x-2 mb-6">
-          <Calendar className="h-6 w-6 text-green-600" />
-          <h3 className="text-lg font-semibold">Category Budgets</h3>
-        </div>
-        <div className="space-y-4">
+
+        {/* Category Budgets Section */}
+        <div className="mt-12">
+          <h4 className="text-lg font-semibold text-gray-800 mb-6 pb-2 border-b border-gray-200">Category Budgets</h4>
+          <div className="space-y-4">
             {categoryBudgets.map((category, idx) => {
               const isOverBudget = category.current > category.budget;
               return (
@@ -628,17 +585,47 @@ const BudgetManager = () => {
             })}
           </div>
         </div>
-      <div className="flex justify-end mt-8">
-        <button
-          className="px-6 py-3 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all duration-300"
-          onClick={handleSave}
-          disabled={isSaving}
-        >
-          {isSaving ? 'Saving...' : 'Save Changes'}
-        </button>
+
+        {/* Single Save Button */}
+        <div className="flex justify-end mt-10">
+          <button
+            className="px-6 py-3 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all duration-300"
+            onClick={handleSave}
+            disabled={isSaving}
+          >
+            {isSaving ? 'Saving...' : 'Save All Budget Settings'}
+          </button>
+        </div>
+      </div>
+      {/* Toast Notifications */}
+      <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-50 w-full flex justify-center pointer-events-none">
+        <div className="w-full max-w-md">
+          {showSuccessAlert && (
+            <div className="flex items-center justify-between bg-green-50 border border-green-200 text-green-800 rounded-lg p-4 shadow-lg mb-4 animate-fade-in pointer-events-auto transition-all duration-300">
+              <div className="flex items-center space-x-2">
+                <Save className="h-5 w-5 text-green-600" />
+                <span className="font-medium">Settings saved successfully!</span>
+              </div>
+              <button onClick={() => setShowSuccessAlert(false)} className="ml-4 text-green-700 hover:text-green-900 focus:outline-none">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          )}
+          {showError && error && (
+            <div className="flex items-center justify-between bg-red-50 border border-red-200 text-red-800 rounded-lg p-4 shadow-lg mb-4 animate-fade-in pointer-events-auto transition-all duration-300">
+              <div className="flex items-center space-x-2">
+                <AlertCircle className="h-5 w-5 text-red-600" />
+                <span className="font-medium">{error}</span>
+              </div>
+              <button onClick={() => setShowError(false)} className="ml-4 text-red-700 hover:text-red-900 focus:outline-none">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 };
 
-export default BudgetManager; 
+export default BudgetManager;
