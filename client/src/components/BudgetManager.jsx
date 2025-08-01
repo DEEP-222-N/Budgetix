@@ -63,7 +63,7 @@ const BudgetManager = () => {
   const [customBudgetError, setCustomBudgetError] = useState('');
   const [autoFillPrompt, setAutoFillPrompt] = useState(false);
   const [autoFillDone, setAutoFillDone] = useState(false);
-  const [autoFillSuccess, setAutoFillSuccess] = useState(false);
+  const [autoFillDeclined, setAutoFillDeclined] = useState(false);
 
   useEffect(() => {
     if (showSuccess) {
@@ -130,6 +130,13 @@ const BudgetManager = () => {
           console.log('✅ Loaded monthly budget data:', budgetData);
           console.log('📅 Current month:', budgetData.month);
           setMonthlyBudget(budgetData.monthly_budget_total);
+          
+          // Load budget settings fields
+          setMonthlySavingsGoal(budgetData.monthly_savings_goal ? String(budgetData.monthly_savings_goal) : '');
+          setMonthlyInvestmentGoal(budgetData.monthly_investment_goal ? String(budgetData.monthly_investment_goal) : '');
+          setAchievableGoal(budgetData.achievable_goal || '');
+          setMonthsToAchieveGoal(budgetData.months_to_achieve_goal ? String(budgetData.months_to_achieve_goal) : '');
+          
           setCategoryBudgets(allCategories.map(name => {
             const dbName = getCategoryColumnName(name);
             return {
@@ -530,8 +537,8 @@ const BudgetManager = () => {
                                 setMonthlySavingsGoal(customBudget.aiSuggestedSavings);
                                 setMonthlyBudget(customBudget.remaining);
                                 setMonthsToAchieveGoal(months);
-                                setAutoFillSuccess(true);
                                 setAutoFillDone(true);
+                                setAutoFillDeclined(false);
                               }}
                               type="button"
                             >
@@ -540,8 +547,8 @@ const BudgetManager = () => {
                             <button
                               className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none"
                               onClick={() => {
-                                setAutoFillSuccess(false);
                                 setAutoFillDone(true);
+                                setAutoFillDeclined(true);
                               }}
                               type="button"
                             >
@@ -550,8 +557,11 @@ const BudgetManager = () => {
                           </div>
                         </div>
                       )}
-                      {autoFillDone && autoFillSuccess && (
+                      {autoFillDone && !autoFillDeclined && (
                         <div className="mt-2 text-green-700 font-semibold">Fields have been auto-filled in Budget Settings below!</div>
+                      )}
+                      {autoFillDone && autoFillDeclined && (
+                        <div className="mt-2 text-blue-700 font-semibold">OK, fill manually</div>
                       )}
                     </div>
                   )}
