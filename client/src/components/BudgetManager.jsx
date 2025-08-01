@@ -63,6 +63,7 @@ const BudgetManager = () => {
   const [customBudgetError, setCustomBudgetError] = useState('');
   const [autoFillPrompt, setAutoFillPrompt] = useState(false);
   const [autoFillDone, setAutoFillDone] = useState(false);
+  const [autoFillSuccess, setAutoFillSuccess] = useState(false);
 
   useEffect(() => {
     if (showSuccess) {
@@ -529,6 +530,7 @@ const BudgetManager = () => {
                                 setMonthlySavingsGoal(customBudget.aiSuggestedSavings);
                                 setMonthlyBudget(customBudget.remaining);
                                 setMonthsToAchieveGoal(months);
+                                setAutoFillSuccess(true);
                                 setAutoFillDone(true);
                               }}
                               type="button"
@@ -537,7 +539,10 @@ const BudgetManager = () => {
                             </button>
                             <button
                               className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none"
-                              onClick={() => setAutoFillDone(true)}
+                              onClick={() => {
+                                setAutoFillSuccess(false);
+                                setAutoFillDone(true);
+                              }}
                               type="button"
                             >
                               No
@@ -545,7 +550,7 @@ const BudgetManager = () => {
                           </div>
                         </div>
                       )}
-                      {autoFillDone && (
+                      {autoFillDone && autoFillSuccess && (
                         <div className="mt-2 text-green-700 font-semibold">Fields have been auto-filled in Budget Settings below!</div>
                       )}
                     </div>
