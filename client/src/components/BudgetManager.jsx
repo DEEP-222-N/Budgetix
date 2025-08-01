@@ -55,6 +55,15 @@ const BudgetManager = () => {
   const [showError, setShowError] = useState(false);
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
 
+  // Add state for aiPromptResponse at the top of the component
+  const [aiPromptResponse, setAiPromptResponse] = useState(null);
+  // Add state for custom budget breakdown and loading
+  const [customBudget, setCustomBudget] = useState(null);
+  const [customBudgetLoading, setCustomBudgetLoading] = useState(false);
+  const [customBudgetError, setCustomBudgetError] = useState('');
+  const [autoFillPrompt, setAutoFillPrompt] = useState(false);
+  const [autoFillDone, setAutoFillDone] = useState(false);
+
   useEffect(() => {
     if (showSuccess) {
       setShowSuccessAlert(true);
@@ -385,7 +394,7 @@ const BudgetManager = () => {
         <form onSubmit={handleAiSuggestion} className="mb-6">
           <div className="mb-4">
             <label htmlFor="goal" className="block text-sm font-medium text-gray-700 mb-2">
-              What's your financial goal? (e.g., "I want to buy a $300k car in 24 months")
+              What's your financial goal? (e.g., "I want to buy a bike worth 100000 in 2 years")
             </label>
             <div className="flex gap-2">
               <input
@@ -394,7 +403,7 @@ const BudgetManager = () => {
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
                 className="flex-1 rounded-md border border-gray-300 px-4 py-2 focus:ring-indigo-500 focus:border-indigo-500"
-                placeholder="I want to buy a $300k car in 24 months..."
+                placeholder="I want to buy a bike worth 100000 in 2 years"
                 disabled={isLoadingAi}
               />
               <button
@@ -425,15 +434,129 @@ const BudgetManager = () => {
         )}
 
         {aiSuggestion && (
-          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-            <h3 className="font-medium text-gray-900 mb-2">Your Personalized Budget Plan</h3>
-            <div 
-              className="prose max-w-none text-gray-700"
-              dangerouslySetInnerHTML={{ 
-                __html: aiSuggestion.replace(/\n/g, '<br />')
-              }} 
-            />
-          </div>
+          <>
+            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+              <h3 className="font-medium text-gray-900 mb-2">Your Personalized Budget Plan</h3>
+              <div 
+                className="prose max-w-none text-gray-700"
+                dangerouslySetInnerHTML={{ 
+                  __html: aiSuggestion.replace(/\n/g, '<br />')
+                }} 
+              />
+            </div>
+            <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <p className="mb-3 font-medium text-blue-900">Do you want the AI to build a customized AI budget?</p>
+              <div className="flex gap-4">
+                <button
+                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none"
+                  onClick={async () => {
+                    setAiPromptResponse('yes');
+                    setCustomBudget(null);
+                    setCustomBudgetError('');
+                    setCustomBudgetLoading(true);
+                    try {
+                      const response = await fetch('http://localhost:5000/api/ai/custom-budget-50-30-20', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ userId: user.id, aiSuggestion })
+                      });
+                      const data = await response.json();
+                      if (!data.success) throw new Error(data.error || 'Failed to get custom budget');
+                      setCustomBudget(data);
+                    } catch (err) {
+                      setCustomBudgetError(err.message || 'Failed to get custom budget');
+                    } finally {
+                      setCustomBudgetLoading(false);
+                    }
+                  }}
+                  type="button"
+                >
+                  Yes
+                </button>
+                <button
+                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none"
+                  onClick={() => setAiPromptResponse('no')}
+                  type="button"
+                >
+                  No
+                </button>
+              </div>
+              {aiPromptResponse === 'yes' && (
+                <div className="mt-3">
+                  {customBudgetLoading && <div className="text-blue-700 font-semibold">Calculating your custom 50/30/20 budget...</div>}
+                  {customBudgetError && <div className="text-red-700 font-semibold">{customBudgetError}</div>}
+                  {customBudget && (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-2">
+                      <h4 className="font-bold text-green-900 mb-2">Your 50/30/20 Custom Budget</h4>
+                      <div className="text-gray-800 mb-1">Monthly Income: <span className="font-semibold">₹{customBudget.monthlyIncome.toLocaleString()}</span></div>
+                      <div className="text-gray-800 mb-1">AI-Suggested Savings: <span className="font-semibold">₹{customBudget.aiSuggestedSavings.toLocaleString()}</span></div>
+                      <div className="text-gray-800 mb-1">Remaining for 50/30/20: <span className="font-semibold">₹{customBudget.remaining.toLocaleString()}</span></div>
+                      <div className="mt-2">
+                        <div className="text-blue-900 font-medium">
+                          Needs (50%): <span className="font-semibold">₹{customBudget.breakdown.needs.toLocaleString()}</span>
+                          <div className="text-xs text-gray-700 mt-1">(Food, Transportation and Fuel, Housing, Utilities, Grocery, Healthcare, Education)</div>
+                        </div>
+                        <div className="text-blue-900 font-medium mt-2">
+                          Wants (30%): <span className="font-semibold">₹{customBudget.breakdown.wants.toLocaleString()}</span>
+                          <div className="text-xs text-gray-700 mt-1">(Entertainment, Shopping, Travel, Personal Care)</div>
+                        </div>
+                        <div className="text-blue-900 font-medium mt-2">
+                          Extra (20%): <span className="font-semibold">₹{customBudget.breakdown.extra.toLocaleString()}</span>
+                        </div>
+                      </div>
+                      {/* Auto-fill prompt */}
+                      {!autoFillDone && (
+                        <div className="mt-4 p-3 bg-blue-100 rounded-lg border border-blue-200">
+                          <p className="mb-2 font-medium text-blue-900">Should I add this automatically?</p>
+                          <div className="flex gap-4">
+                            <button
+                              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none"
+                              onClick={() => {
+                                // Extract achievable goal from aiPrompt or aiSuggestion
+                                let goalText = aiPrompt;
+                                // Try to extract from AI suggestion if possible
+                                const matchGoal = aiSuggestion.match(/Financial Analysis: (.+)/i);
+                                if (matchGoal) goalText = matchGoal[1];
+                                // Extract months from goal text (e.g. 'in 1 year', 'in 6 months')
+                                let months = '';
+                                const monthsMatch = goalText.match(/in (\d+) months?/i);
+                                if (monthsMatch) months = monthsMatch[1];
+                                else {
+                                  const yearsMatch = goalText.match(/in (\d+) years?/i);
+                                  if (yearsMatch) months = String(Number(yearsMatch[1]) * 12);
+                                }
+                                setAchievableGoal(goalText);
+                                setMonthlySavingsGoal(customBudget.aiSuggestedSavings);
+                                setMonthlyBudget(customBudget.remaining);
+                                setMonthsToAchieveGoal(months);
+                                setAutoFillDone(true);
+                              }}
+                              type="button"
+                            >
+                              Yes
+                            </button>
+                            <button
+                              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none"
+                              onClick={() => setAutoFillDone(true)}
+                              type="button"
+                            >
+                              No
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {autoFillDone && (
+                        <div className="mt-2 text-green-700 font-semibold">Fields have been auto-filled in Budget Settings below!</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+              {aiPromptResponse === 'no' && (
+                <div className="mt-3 text-red-700 font-semibold">No problem! You can always ask for help later.</div>
+              )}
+            </div>
+          </>
         )}
       </div>
       {/* Toast Notifications */}

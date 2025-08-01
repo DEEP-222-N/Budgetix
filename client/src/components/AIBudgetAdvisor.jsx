@@ -8,6 +8,7 @@ const AIBudgetAdvisor = () => {
   const [suggestion, setSuggestion] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [promptResponse, setPromptResponse] = useState(null);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -92,15 +93,42 @@ const AIBudgetAdvisor = () => {
       )}
 
       {suggestion && (
-        <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-          <h3 className="font-medium text-gray-900 mb-2">Your Personalized Budget Plan</h3>
-          <div 
-            className="prose max-w-none text-gray-700"
-            dangerouslySetInnerHTML={{ 
-              __html: suggestion.replace(/\n/g, '<br />')
-            }} 
-          />
-        </div>
+        <>
+          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+            <h3 className="font-medium text-gray-900 mb-2">Your Personalized Budget Plan</h3>
+            <div 
+              className="prose max-w-none text-gray-700"
+              dangerouslySetInnerHTML={{ 
+                __html: suggestion.replace(/\n/g, '<br />')
+              }} 
+            />
+          </div>
+          <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <p className="mb-3 font-medium text-blue-900">Do you want the AI to build a customized AI budget?</p>
+            <div className="flex gap-4">
+              <button
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none"
+                onClick={() => setPromptResponse('yes')}
+                type="button"
+              >
+                Yes
+              </button>
+              <button
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none"
+                onClick={() => setPromptResponse('no')}
+                type="button"
+              >
+                No
+              </button>
+            </div>
+            {promptResponse === 'yes' && (
+              <div className="mt-3 text-green-700 font-semibold">Great! The AI will help you build a customized budget.</div>
+            )}
+            {promptResponse === 'no' && (
+              <div className="mt-3 text-red-700 font-semibold">No problem! You can always ask for help later.</div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
