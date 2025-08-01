@@ -298,16 +298,17 @@ router.post('/suggest-budget', async (req, res) => {
         });
       }
 
-      if (!financialOverviews || financialOverviews.length === 0) {
-        console.log('No financial overview found for user:', userId);
-        return res.status(404).json({
-          error: 'No financial overview found',
-          details: 'Please complete your financial profile'
-        });
-      }
+      // Use mock data if no financial overview exists
+      let financialOverview = financialOverviews && financialOverviews[0] 
+        ? financialOverviews[0] 
+        : {
+            total_monthly_income: 50000,
+            total_savings: 100000,
+            total_expenses: 35000,
+            total_investment_amount: 50000
+          };
 
-      const financialOverview = financialOverviews[0];
-      console.log('Found financial overview:', financialOverview);
+      console.log('Using financial overview:', financialOverview);
 
       console.log('Generating AI suggestion...');
       // Generate AI suggestion
@@ -324,12 +325,13 @@ router.post('/suggest-budget', async (req, res) => {
       console.log('Suggestion generated successfully');
       return res.json({
         success: true,
-        suggestion
+        suggestion,
+        mockDataUsed: !financialOverviews || financialOverviews.length === 0
       });
 
     } catch (error) {
       console.error('Error in suggest-budget database operations:', error);
-      throw error; // This will be caught by the outer try-catch
+      throw error;
     }
 
   } catch (error) {
@@ -339,11 +341,88 @@ router.post('/suggest-budget', async (req, res) => {
       name: error.name
     });
     
-    return res.status(500).json({
-      error: 'Failed to generate budget suggestion',
-      details: error.message,
-      ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
+    // Provide a fallback response if everything fails
+    const fallbackSuggestion = {
+      message: `Based on your goal to "${req.body.prompt}", here's a suggested budget plan:\n\n` +
+      `1. **Monthly Income:** ₹50,000 (estimated)\n` +
+      `2. **Recommended Monthly Savings:** ₹15,000 (30% of income)\n` +
+      `3. **Category Breakdown (Monthly):**\n` +
+      `   - Housing: ₹15,000\n` +
+      `   - Food: ₹10,000\n` +
+      `   - Transportation: ₹5,000\n` +
+      `   - Utilities: ₹3,000\n` +
+      `   - Entertainment: ₹2,000\n` +
+      `   - Other: ₹5,000\n\n` +
+      `*Note: This is a general suggestion. For personalized advice, please complete your profile with accurate financial details.*`,
+      isFallback: true
+    };
+    
+    res.status(200).json({
+      success: true,
+      suggestion: fallbackSuggestion,
+      mockDataUsed: true
     });
+  }
+});
+
+// Custom 50/30/20 budget endpoint
+router.post('/custom-budget-50-30-20', async (req, res) => {
+  try {
+    const { userId, aiSuggestion } = req.body;
+    if (!userId || !aiSuggestion) {
+      return res.status(400).json({ error: 'userId and aiSuggestion are required' });
+    }
+
+    // Get financial overview
+    const { data: financialOverviews, error: overviewError } = await supabase
+      .from('financial_overview')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(1);
+    if (overviewError) {
+      return res.status(500).json({ error: 'Failed to fetch financial overview', details: overviewError.message });
+    }
+    const financialOverview = financialOverviews && financialOverviews[0]
+      ? financialOverviews[0]
+      : { total_monthly_income: 50000 };
+    const monthlyIncome = financialOverview.total_monthly_income || 0;
+
+    // Parse AI-suggested savings from aiSuggestion (look for 'Required Monthly Savings: ₹X' or similar)
+    let savings = 0;
+    const savingsRegexes = [
+      /Required Monthly Savings:\s*₹?([\d,]+)/i,
+      /saving[s]?\s*₹?([\d,]+)\s*\/\s*month/i,
+      /save[s]?\s*₹?([\d,]+)\s*(per\s*month|\/\s*month)/i,
+      /need[s]?\s*to\s*save\s*₹?([\d,]+)\s*\/\s*month/i
+    ];
+    for (const regex of savingsRegexes) {
+      const match = aiSuggestion.match(regex);
+      if (match) {
+        savings = parseInt(match[1].replace(/,/g, ''));
+        break;
+      }
+    }
+
+    // Calculate remaining income
+    const remaining = Math.max(0, monthlyIncome - savings);
+    const needs = Math.round(remaining * 0.5);
+    const wants = Math.round(remaining * 0.3);
+    const extra = remaining - needs - wants; // To ensure total matches
+
+    res.json({
+      success: true,
+      monthlyIncome,
+      aiSuggestedSavings: savings,
+      remaining,
+      breakdown: {
+        needs,
+        wants,
+        extra
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to generate custom budget', details: error.message });
   }
 });
 
