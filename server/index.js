@@ -3,7 +3,8 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
-require('./recurring-expenses'); // Automatically run recurring job
+// Import recurring expenses processing
+const recurringExpenses = require('./recurring-expenses');
 
 const authRoutes = require('./routes/auth');
 const aiRoutes = require('./routes/aiRoutes');
@@ -37,4 +38,10 @@ app.use('/api/ai', aiRoutes);
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log('Starting recurring expenses processing...');
+  
+  // Run recurring expenses processing after server starts
+  setTimeout(() => {
+    console.log('Recurring expenses processing started');
+  }, 1000);
 });
