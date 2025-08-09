@@ -221,6 +221,79 @@ Examples:
     }
   }
 
+  async scanReceiptBase64({ base64Data, mimeType }) {
+    try {
+      const prompt = `
+      Analyze this receipt image and extract the following information in JSON format:
+      - Total amount (just the number)
+      - Date (in ISO format)
+      - Description or items purchased (brief summary)
+      - Merchant/store name
+      - Suggested category (one of: housing,transportation,groceries,utilities,entertainment,food,shopping,healthcare,education,personal,travel,insurance,gifts,bills,other-expense)
+
+      Only respond with valid JSON in this exact format:
+      {
+        "amount": number,
+        "date": "ISO date string",
+        "description": "string",
+        "merchantName": "string",
+        "category": "string"
+      }
+
+      If it's not a receipt, return {} only.
+      `;
+
+      const result = await this.withRetry(async () => {
+        const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        return model.generateContent([
+          {
+            inlineData: {
+              data: base64Data,
+              mimeType: mimeType || 'image/jpeg',
+            },
+          },
+          prompt,
+        ]);
+      });
+
+      const response = await result.response;
+      let text = response.text();
+      // Clean fenced code blocks if any
+      text = text.replace(/```(?:json)?\n?/g, '').replace(/```/g, '').trim();
+
+      let parsed = {};
+      try {
+        parsed = JSON.parse(text);
+      } catch (e) {
+        // Try to extract JSON object substring
+        const match = text.match(/\{[\s\S]*\}/);
+        if (match) {
+          parsed = JSON.parse(match[0]);
+        } else {
+          return {};
+        }
+      }
+
+      // Normalize and coerce types
+      const amount = parsed.amount != null ? Number(parsed.amount) : null;
+      const dateIso = parsed.date ? new Date(parsed.date).toISOString() : null;
+      const description = parsed.description || '';
+      const merchantName = parsed.merchantName || '';
+      const category = parsed.category || '';
+
+      return {
+        amount,
+        date: dateIso,
+        description,
+        merchantName,
+        category,
+      };
+    } catch (error) {
+      console.error('scanReceiptBase64 error:', error);
+      return {};
+    }
+  }
+
   async generateBudgetSuggestion(prompt, budgetData, financialOverview) {
     // Helper function to extract amount and time period from prompt
     const extractGoalDetails = (prompt) => {

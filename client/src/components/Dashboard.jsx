@@ -20,6 +20,9 @@ const Dashboard = () => {
   const [expenses, setExpenses] = useState([]);
   const [expensesLoading, setExpensesLoading] = useState(true);
   const [expensesError, setExpensesError] = useState(null);
+  const [budgetsByMonth, setBudgetsByMonth] = useState({});
+  const [budgetsLoading, setBudgetsLoading] = useState(false);
+  const [budgetsError, setBudgetsError] = useState(null);
   const [showAllModal, setShowAllModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [editingId, setEditingId] = useState(null);
@@ -58,6 +61,44 @@ const Dashboard = () => {
     };
     fetchExpenses();
   }, [user]);
+
+  // Fetch budgets for the selected year so the line chart uses per-month values
+  useEffect(() => {
+    const fetchBudgetsForYear = async () => {
+      if (!user) return;
+      setBudgetsLoading(true);
+      setBudgetsError(null);
+      try {
+        const year = selectedYear === 'All' ? new Date().getFullYear() : parseInt(selectedYear);
+        const { data, error } = await supabase
+          .from('budgets')
+          .select('budget_month, budget_year, monthly_budget_total')
+          .eq('user_id', user.id)
+          .eq('budget_year', year);
+        if (error) {
+          setBudgetsError('Failed to load budgets');
+          setBudgetsByMonth({});
+        } else {
+          const map = {};
+          (data || []).forEach(row => {
+            if (!row.budget_month) return;
+            const monthIndex = months.indexOf(row.budget_month);
+            if (monthIndex > 0) { // months[0] is 'All'
+              map[monthIndex - 1] = Number(row.monthly_budget_total) || 0; // 0-based index for Jan..Dec
+            }
+          });
+          setBudgetsByMonth(map);
+        }
+      } catch (e) {
+        setBudgetsError('Failed to load budgets');
+        setBudgetsByMonth({});
+      } finally {
+        setBudgetsLoading(false);
+      }
+    };
+    fetchBudgetsForYear();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, selectedYear]);
 
   // Get unique years from expenses
   const years = React.useMemo(() => {
@@ -107,7 +148,7 @@ const Dashboard = () => {
     const data = Array.from({ length: 12 }, (_, i) => ({
       month: months[i + 1],
       spent: 0,
-      budget: monthlyBudget
+      budget: budgetsByMonth[i] ?? 0
     }));
     expenses.forEach(exp => {
       const date = new Date(exp.date);
@@ -117,7 +158,7 @@ const Dashboard = () => {
       }
     });
     return data;
-  }, [expenses, selectedYear, monthlyBudget]);
+  }, [expenses, selectedYear, budgetsByMonth]);
 
   // Calculate spent for selected period
   const totalSpent = React.useMemo(() => {
@@ -168,7 +209,7 @@ const Dashboard = () => {
   }
 
   // Check if all data is loaded (after all hooks)
-  const isDataLoaded = !expensesLoading && !budgetLoading && user;
+  const isDataLoaded = !expensesLoading && !budgetLoading && !budgetsLoading && user;
 
   // Show loading screen until all data is ready
   if (!isDataLoaded) {

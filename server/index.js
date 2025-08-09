@@ -19,7 +19,9 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-app.use(express.json());
+// Increase body size limits to support base64-encoded images from receipt scans
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 
 // Add request logging
 app.use((req, res, next) => {
