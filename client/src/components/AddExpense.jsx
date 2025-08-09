@@ -176,7 +176,8 @@ const AddExpense = () => {
       
       // Prepare data for Supabase expenses table
       const isRecurring = formData.frequency !== '';
-      const today = new Date().toISOString().split('T')[0];
+      // Use the chosen expense date as the anchor for recurrence, not today's date
+      const anchorDate = formData.date;
       const expenseData = {
         amount: parseFloat(formData.amount),
         category: formData.category,
@@ -185,9 +186,9 @@ const AddExpense = () => {
         payment_method: formData.paymentMethod,
         frequency: formData.frequency,
         is_recurring: isRecurring,
-        recurring_start_date: isRecurring ? today : null,
-        last_occurred: isRecurring ? today : null,
-        recurring_next_date: isRecurring ? getNextDate(today, formData.frequency) : null,
+        recurring_start_date: isRecurring ? anchorDate : null,
+        last_occurred: isRecurring ? anchorDate : null,
+        recurring_next_date: isRecurring ? getNextDate(anchorDate, formData.frequency) : null,
         recurring_end_date: isRecurring && formData.recurring_end_date ? formData.recurring_end_date : null,
         user_id: user.id // Use the authenticated user's ID from AuthContext
       };

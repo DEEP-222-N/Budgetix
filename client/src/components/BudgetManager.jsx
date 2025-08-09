@@ -65,6 +65,16 @@ const BudgetManager = () => {
   const [autoFillDone, setAutoFillDone] = useState(false);
   const [autoFillDeclined, setAutoFillDeclined] = useState(false);
 
+  // Month/Year selection for budgeting period (UI only for now)
+  const now = new Date();
+  const monthNames = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  const [selectedMonth, setSelectedMonth] = useState(now.getMonth());
+  const [selectedYear, setSelectedYear] = useState(now.getFullYear());
+  const years = Array.from({ length: 9 }, (_, i) => now.getFullYear() - 4 + i);
+
   useEffect(() => {
     if (showSuccess) {
       setShowSuccessAlert(true);
@@ -86,6 +96,7 @@ const BudgetManager = () => {
     setMonthlyBudgetInput(undefined);
   }, [monthlyBudget]);
 
+  
   // Handler for input change
   const handleMonthlyBudgetInputChange = (value) => {
     if (/^\d*$/.test(value)) {
@@ -104,11 +115,13 @@ const BudgetManager = () => {
       setLoading(true);
       setError(null);
       try {
-        // Temporarily use old budget system until migration is applied
+        // Fetch budget for the selected month & year
         const { data: budgetData, error: budgetError } = await supabase
           .from('budgets')
           .select('*')
           .eq('user_id', user.id)
+          .eq('budget_month', monthNames[selectedMonth])
+          .eq('budget_year', selectedYear)
           .single();
         if (budgetError && budgetError.code !== 'PGRST116') {
           setError('Failed to load budget data');
@@ -128,7 +141,7 @@ const BudgetManager = () => {
         });
         if (budgetData) {
           console.log('✅ Loaded monthly budget data:', budgetData);
-          console.log('📅 Current month:', budgetData.month);
+          console.log('📅 Budget period:', budgetData.budget_month, budgetData.budget_year);
           setMonthlyBudget(budgetData.monthly_budget_total);
           
           // Load budget settings fields
@@ -162,7 +175,7 @@ const BudgetManager = () => {
       }
     };
     fetchUserBudgetData();
-  }, [user, supabase, setMonthlyBudget]);
+  }, [user, supabase, setMonthlyBudget, selectedMonth, selectedYear]);
 
   const handleSettingChange = (key, value) => {
     setSettings(prev => ({ ...prev, [key]: value }));
@@ -217,7 +230,7 @@ const BudgetManager = () => {
     setIsSaving(true);
     setError(null);
     try {
-      // Prepare budget updates for the current month
+      // Prepare budget updates for the selected month/year
       const budgetUpdates = {};
       categoryBudgets.forEach(cat => {
         const dbName = getCategoryColumnName(cat.name);
@@ -231,44 +244,26 @@ const BudgetManager = () => {
       budgetUpdates.monthly_savings_goal = monthlySavingsGoal ? Number(monthlySavingsGoal) : 0;
       budgetUpdates.achievable_goal = achievableGoal || null;
       budgetUpdates.months_to_achieve_goal = monthsToAchieveGoal ? Number(monthsToAchieveGoal) : (achievableGoal ? null : 0);
+      budgetUpdates.budget_month = monthNames[selectedMonth];
+      budgetUpdates.budget_year = selectedYear;
       
       // Log the data being sent to help with debugging
       console.log('Saving monthly budget data:', budgetUpdates);
       
-      // Temporarily use old budget system until migration is applied
-      budgetUpdates.user_id = user.id;
-      budgetUpdates.updated_at = new Date().toISOString();
-      
-      // Try to update existing budget first, then insert if it doesn't exist
-      let updateResult, upsertError;
-      
-      // First, try to update existing budget
-      const { data: existingBudget } = await supabase
+      // Upsert by unique key (user, month, year)
+      const payload = {
+        user_id: user.id,
+        ...budgetUpdates,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error: upsertError } = await supabase
         .from('budgets')
-        .select('id')
-        .eq('user_id', user.id)
-        .single();
-      
-      if (existingBudget) {
-        // Update existing budget
-        const { data, error } = await supabase
-          .from('budgets')
-          .update(budgetUpdates)
-          .eq('user_id', user.id);
-        updateResult = data;
-        upsertError = error;
-      } else {
-        // Insert new budget
-        const { data, error } = await supabase
-          .from('budgets')
-          .insert(budgetUpdates);
-        updateResult = data;
-        upsertError = error;
-      }
-      
-      console.log('📤 Update result:', updateResult);
-      console.log('❌ Update error:', upsertError);
-      
+        .upsert(payload, {
+          onConflict: 'user_id,budget_month,budget_year',
+          ignoreDuplicates: false,
+        });
+
       if (upsertError) {
         console.error('Budget save error:', upsertError);
         setError(`Failed to save budget data: ${upsertError.message || 'Database error'}`);
@@ -294,11 +289,10 @@ const BudgetManager = () => {
     setError(null);
     try {
       const currentDate = new Date();
-      const currentMonth = currentDate.toISOString().slice(0, 7); // Gets YYYY-MM format
-      
       const budgetSettingsData = {
         user_id: user.id,
-        month: currentMonth, // Add current month to match unique constraint
+        budget_month: monthNames[selectedMonth],
+        budget_year: selectedYear,
         monthly_budget_total: Number(monthlyBudgetInput !== undefined ? monthlyBudgetInput : monthlyBudget) || 0,
         monthly_savings_goal: monthlySavingsGoal ? Number(monthlySavingsGoal) : 0,
         monthly_investment_goal: monthlyInvestmentGoal ? Number(monthlyInvestmentGoal) : 0,
@@ -310,7 +304,7 @@ const BudgetManager = () => {
       const { error: upsertError } = await supabase
         .from('budgets')
         .upsert(budgetSettingsData, { 
-          onConflict: 'user_id,month', // Update onConflict to match unique constraint
+          onConflict: 'user_id,budget_month,budget_year',
           ignoreDuplicates: false 
         });
       if (upsertError) {
@@ -611,6 +605,31 @@ const BudgetManager = () => {
         {/* Budget Settings Section */}
         <div className="mb-12">
           <h4 className="text-lg font-semibold text-gray-800 mb-6 pb-2 border-b border-gray-200">Budget Settings</h4>
+          {/* Month/Year selectors */}
+          <div className="mb-6 flex flex-wrap items-center gap-3">
+            <div className="flex items-center gap-2 mr-2 text-gray-700">
+              <Calendar className="h-5 w-5 text-blue-600" />
+              <span className="text-sm font-medium">Budget period</span>
+            </div>
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(Number(e.target.value))}
+              className="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {monthNames.map((name, idx) => (
+                <option key={name} value={idx}>{name}</option>
+              ))}
+            </select>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+              className="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {years.map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
             {/* Left Column */}
             <div className="space-y-6">
