@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import './AddExpense.css';
 import { useAuth } from '../context/AuthContext';
 import { Upload as UploadIcon, FileText, CheckCircle, AlertCircle, Brain, X } from 'lucide-react';
@@ -27,6 +27,10 @@ const AddExpense = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processedData, setProcessedData] = useState(null);
   const [showUploadSection, setShowUploadSection] = useState(false);
+  // Receipt scan states
+  const [isScanningReceipt, setIsScanningReceipt] = useState(false);
+  const [scanError, setScanError] = useState('');
+  const scanInputRef = useRef(null);
 
   // Toast logic
   const [showError, setShowError] = useState(false);
@@ -111,6 +115,76 @@ const AddExpense = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData({ ...formData, [name]: value });
+  };
+
+  // Map AI category to app category list
+  const mapAiCategoryToAppCategory = (aiCategoryRaw) => {
+    if (!aiCategoryRaw) return '';
+    const ai = aiCategoryRaw.toLowerCase().trim();
+    if (ai.includes('food') || ai.includes('restaurant') || ai.includes('dining')) return 'Food';
+    if (ai.includes('transport') || ai.includes('fuel') || ai.includes('gas') || ai.includes('cab') || ai.includes('uber') || ai.includes('ola')) return 'Transportation and Fuel';
+    if (ai.includes('entertain')) return 'Entertainment';
+    if (ai.includes('hous') || ai.includes('rent') || ai.includes('mortgage')) return 'Housing';
+    if (ai.includes('utilit') || ai.includes('electric') || ai.includes('water') || ai.includes('internet') || ai.includes('wifi') || ai.includes('bills')) return 'Utilities';
+    if (ai.includes('grocery') || ai.includes('grocer') || ai.includes('supermarket')) return 'Grocery';
+    if (ai.includes('health') || ai.includes('medical') || ai.includes('pharma') || ai.includes('doctor')) return 'Healthcare';
+    if (ai.includes('educat') || ai.includes('tuition') || ai.includes('course')) return 'Education';
+    if (ai.includes('shop') || ai.includes('retail') || ai.includes('clothes') || ai.includes('apparel')) return 'Shopping';
+    if (ai.includes('insur')) return 'Insurance';
+    if (ai.includes('travel') || ai.includes('flight') || ai.includes('hotel') || ai.includes('trip')) return 'Travel';
+    return 'Other';
+  };
+
+  // Convert File to base64 (without data URL prefix)
+  const fileToBase64 = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result;
+      // result is like: data:<mime>;base64,<data>
+      const commaIndex = typeof result === 'string' ? result.indexOf(',') : -1;
+      resolve(commaIndex >= 0 ? result.slice(commaIndex + 1) : result);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
+  const handleScanReceiptFile = async (file) => {
+    try {
+      setScanError('');
+      setIsScanningReceipt(true);
+      const base64Data = await fileToBase64(file);
+      const response = await fetch('http://localhost:5000/api/ai/scan-receipt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base64Data, mimeType: file.type })
+      });
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.error || 'Failed to scan receipt');
+      }
+      const r = data.data || {};
+      const mappedCategory = mapAiCategoryToAppCategory(r.category);
+      setFormData((prev) => ({
+        ...prev,
+        amount: r.amount != null && !Number.isNaN(Number(r.amount)) ? String(r.amount) : prev.amount,
+        date: r.date ? new Date(r.date).toISOString().split('T')[0] : prev.date,
+        category: mappedCategory || prev.category,
+        description: (r.merchantName ? `${r.merchantName} - ` : '') + (r.description || prev.description || '')
+      }));
+    } catch (err) {
+      console.error('Receipt scan failed:', err);
+      setScanError(err.message || 'Failed to scan receipt');
+    } finally {
+      setIsScanningReceipt(false);
+    }
+  };
+
+  const onScanInputChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      handleScanReceiptFile(e.target.files[0]);
+      // Reset the input so the same file can be selected again if needed
+      e.target.value = '';
+    }
   };
 
   // Upload handlers
@@ -306,6 +380,31 @@ const AddExpense = () => {
       <p className="subtitle">Track your spending by adding manual expense entries</p>
       
       <form onSubmit={handleSubmit} className="expense-form">
+        <div className="flex items-center justify-between mb-3">
+          <div />
+          <div className="flex items-center gap-2">
+            <input
+              ref={scanInputRef}
+              type="file"
+              accept="image/*"
+              onChange={onScanInputChange}
+              className="hidden"
+            />
+            <button
+              type="button"
+              className="px-3 py-2 bg-indigo-600 text-white rounded-md disabled:opacity-60"
+              onClick={() => scanInputRef.current && scanInputRef.current.click()}
+              disabled={isScanningReceipt}
+            >
+              {isScanningReceipt ? 'Scanning…' : 'Scan Receipt'}
+            </button>
+          </div>
+        </div>
+        {scanError && (
+          <div className="mb-3 text-sm text-red-700 bg-red-100 rounded p-2">
+            {scanError}
+          </div>
+        )}
         <div className="form-group">
           <label htmlFor="amount">
             <i className="fas fa-dollar-sign"></i> Amount <span style={{color: 'red'}}>*</span>

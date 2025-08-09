@@ -2,7 +2,8 @@ require('dotenv').config();
 const { createClient } = require('@supabase/supabase-js');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_ANON_KEY;
+// Use the Service Role key for backend jobs (required for admin operations)
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY;
 
 // Debug logging
 console.log('Environment variables loaded:');
@@ -17,6 +18,20 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
 }
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+async function checkUserExists(userId) {
+  try {
+    const { data, error } = await supabase.auth.admin.getUserById(userId);
+    if (error) {
+      console.error(`Admin user lookup error for ${userId}:`, error.message);
+      return false;
+    }
+    return !!data && !!data.user;
+  } catch (e) {
+    console.error(`Exception during user lookup for ${userId}:`, e.message);
+    return false;
+  }
+}
 
 function getNextDate(last, frequency) {
   const date = new Date(last);
@@ -58,20 +73,15 @@ async function processRecurringExpenses() {
 
   const today = new Date().toISOString().split('T')[0];
   for (const exp of recurringExpenses) {
-    // First, check if the user exists in auth.users table
-    const { data: userExists, error: userCheckError } = await supabase
-      .from('auth.users')
-      .select('id')
-      .eq('id', exp.user_id)
-      .single();
-
-    if (userCheckError || !userExists) {
-      console.log(`Skipping recurring expense ${exp.id} - user ${exp.user_id} does not exist in auth.users table`);
-      // Mark this recurring expense as inactive since the user doesn't exist
-      await supabase
-        .from('expenses')
-        .update({ is_recurring: false })
-        .eq('id', exp.id);
+    // Verify the user exists via admin API. If not, disable this recurring expense and skip.
+    const exists = await checkUserExists(exp.user_id);
+    if (!exists) {
+      console.log(`Skipping recurring expense ${exp.id} - user ${exp.user_id} not found. Marking inactive.`);
+      try {
+        await supabase.from('expenses').update({ is_recurring: false }).eq('id', exp.id);
+      } catch (e) {
+        console.error(`Failed to mark expense ${exp.id} inactive:`, e.message);
+      }
       continue;
     }
 
@@ -114,7 +124,8 @@ async function processRecurringExpenses() {
         .eq('user_id', exp.user_id)
         .eq('category', exp.category)
         .eq('date', nextDate)
-        .eq('is_recurring', true);
+        // We consider any expense on the target date (recurring or not) as existing to avoid duplicates
+        ;
 
       if (checkError) {
         console.error('Error checking for existing expense:', checkError.message);
@@ -132,7 +143,8 @@ async function processRecurringExpenses() {
             date: nextDate,
             payment_method: exp.payment_method,
             frequency: exp.frequency,
-            is_recurring: true,
+            // Inserted instances should NOT be marked recurring; only the template is recurring
+            is_recurring: false,
             recurring_start_date: exp.recurring_start_date,
             last_occurred: nextDate,
             recurring_next_date: getNextDate(nextDate, exp.frequency),
@@ -140,15 +152,16 @@ async function processRecurringExpenses() {
             recurring_end_date: exp.recurring_end_date
           });
 
-          if (insertError) {
+      if (insertError) {
             console.error('Error inserting recurring expense:', insertError.message);
             // If there's a foreign key constraint error, mark this recurring expense as inactive
-            if (insertError.message.includes('foreign key constraint')) {
-              await supabase
-                .from('expenses')
-                .update({ is_recurring: false })
-                .eq('id', exp.id);
-              console.log(`Marked recurring expense ${exp.id} as inactive due to foreign key constraint error`);
+            if (insertError.message && insertError.message.includes('foreign key constraint')) {
+              try {
+                await supabase.from('expenses').update({ is_recurring: false }).eq('id', exp.id);
+                console.log(`Marked recurring expense ${exp.id} as inactive due to foreign key constraint error`);
+              } catch (e) {
+                console.error(`Failed to mark expense ${exp.id} inactive after FK error:`, e.message);
+              }
             }
             break;
           }
@@ -202,20 +215,18 @@ async function cleanupExtraRecurringExpenses() {
   const today = new Date().toISOString().split('T')[0];
   
   for (const exp of recurringExpenses) {
-    // First, check if the user exists in auth.users table
-    const { data: userExists, error: userCheckError } = await supabase
-      .from('auth.users')
-      .select('id')
-      .eq('id', exp.user_id)
-      .single();
-
-    if (userCheckError || !userExists) {
+    // Verify the user exists via admin API; if not, disable this recurring record
+    const exists = await checkUserExists(exp.user_id);
+    if (!exists) {
       console.log(`Cleanup: Skipping recurring expense ${exp.id} - user ${exp.user_id} does not exist in auth.users table`);
-      // Mark this recurring expense as inactive since the user doesn't exist
-      await supabase
-        .from('expenses')
-        .update({ is_recurring: false })
-        .eq('id', exp.id);
+      try {
+        await supabase
+          .from('expenses')
+          .update({ is_recurring: false })
+          .eq('id', exp.id);
+      } catch (e) {
+        console.error(`Cleanup: Failed to mark expense ${exp.id} inactive:`, e.message);
+      }
       continue;
     }
 

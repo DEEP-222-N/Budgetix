@@ -426,4 +426,19 @@ router.post('/custom-budget-50-30-20', async (req, res) => {
   }
 });
 
+// Receipt scan endpoint
+router.post('/scan-receipt', async (req, res) => {
+  try {
+    const { base64Data, mimeType } = req.body;
+    if (!base64Data) {
+      return res.status(400).json({ error: 'base64Data is required' });
+    }
+    const result = await aiService.scanReceiptBase64({ base64Data, mimeType });
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    console.error('scan-receipt error:', error);
+    res.status(500).json({ success: false, error: 'Failed to scan receipt' });
+  }
+});
+
 module.exports = router;
