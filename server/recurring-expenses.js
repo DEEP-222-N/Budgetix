@@ -135,7 +135,9 @@ async function processRecurringExpenses() {
             is_recurring: true,
             recurring_start_date: exp.recurring_start_date,
             last_occurred: nextDate,
-            recurring_next_date: getNextDate(nextDate, exp.frequency)
+            recurring_next_date: getNextDate(nextDate, exp.frequency),
+            // Propagate end date to ensure instances also stop after end date
+            recurring_end_date: exp.recurring_end_date
           });
 
           if (insertError) {
