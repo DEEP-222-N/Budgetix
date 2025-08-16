@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { useCurrency } from '../context/CurrencyContext';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Search, X } from 'lucide-react';
+import { Calendar, Search, X, TrendingUp, Filter, Edit3, Trash2, ArrowLeft, Save, XCircle, ChevronUp, ChevronDown } from 'lucide-react';
 
 const AllExpenses = () => {
   const { user } = useAuth();
@@ -14,6 +14,7 @@ const AllExpenses = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [editingId, setEditingId] = useState(null);
   const [editForm, setEditForm] = useState({ description: '', amount: '' });
+  const [isMinimized, setIsMinimized] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -141,11 +142,14 @@ const AllExpenses = () => {
   // Show loading screen until all data is ready
   if (!isDataLoaded) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50 flex items-center justify-center py-20">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-purple-600 mx-auto mb-4"></div>
-          <h2 className="text-xl font-semibold text-gray-700 mb-2">Loading Expenses</h2>
-          <p className="text-gray-500">Please wait while we fetch your expense data...</p>
+          <div className="relative">
+            <div className="w-20 h-20 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-6"></div>
+            <div className="absolute inset-0 w-20 h-20 border-4 border-transparent border-t-purple-600 rounded-full animate-spin mx-auto" style={{ animationDirection: 'reverse', animationDuration: '1.5s' }}></div>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-3">Loading Your Expenses</h2>
+          <p className="text-gray-600 max-w-md mx-auto">We're fetching your financial data to give you a complete overview of your spending patterns.</p>
         </div>
       </div>
     );
@@ -154,159 +158,304 @@ const AllExpenses = () => {
   // Function to get category color class
   const getCategoryColor = (category) => {
     const colors = {
-      Food: 'bg-green-100',
-      Grocery: 'bg-yellow-100',
-      Education: 'bg-blue-100',
-      'Transportation and Fuel': 'bg-cyan-100',
-      Transportation: 'bg-cyan-100',
-      Entertainment: 'bg-purple-100',
-      Housing: 'bg-pink-100',
-      Utilities: 'bg-orange-100',
-      Healthcare: 'bg-red-100',
-      Shopping: 'bg-indigo-100',
-      'Personal Care': 'bg-teal-100',
-      Travel: 'bg-fuchsia-100',
-      Other: 'bg-gray-200',
-      default: 'bg-gray-100'
+      Food: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      Grocery: 'bg-amber-50 text-amber-700 border-amber-200',
+      Education: 'bg-blue-50 text-blue-700 border-blue-200',
+      'Transportation and Fuel': 'bg-cyan-50 text-cyan-700 border-cyan-200',
+      Transportation: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+      Entertainment: 'bg-violet-50 text-violet-700 border-violet-200',
+      Housing: 'bg-rose-50 text-rose-700 border-rose-200',
+      Utilities: 'bg-orange-50 text-orange-700 border-orange-200',
+      Healthcare: 'bg-red-50 text-red-700 border-red-200',
+      Shopping: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+      'Personal Care': 'bg-teal-50 text-teal-700 border-teal-200',
+      Travel: 'bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200',
+      Other: 'bg-gray-50 text-gray-700 border-gray-200',
+      default: 'bg-gray-50 text-gray-700 border-gray-200'
     };
     return colors[category] || colors.default;
   };
 
+  const totalExpenses = filteredExpenses(expenses, searchTerm).reduce((sum, exp) => sum + exp.amount, 0);
+
   return (
-    <div className="max-w-5xl mx-auto py-8 px-4 bg-white rounded-xl shadow-sm">
-      <div className="flex justify-between items-center mb-8">
-        <button
-          className="px-4 py-2 rounded-lg bg-gradient-to-r from-purple-900 via-purple-800 to-indigo-900 text-white font-semibold shadow-md hover:bg-purple-800 focus:outline-none focus:ring-2 focus:ring-purple-400 transition-all duration-300"
-          onClick={() => navigate('/')}
-        >
-          ← Back to Dashboard
-        </button>
-        <h2 className="text-2xl font-bold">All Expenses</h2>
-      </div>
-      
-      <div className="relative mb-6">
-        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-          <Search className="h-5 w-5 text-gray-400" />
+    <div className="bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header Section */}
+        <div className="mb-8">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+            <button
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white text-gray-700 font-medium shadow-sm border border-gray-200 hover:bg-gray-50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 group"
+              onClick={() => navigate('/')}
+            >
+              <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform duration-200" />
+              Back to Dashboard
+            </button>
+            <div className="text-center sm:text-right">
+              <h1 className="text-3xl font-bold text-gray-900 mb-1">Expense Management</h1>
+              <p className="text-gray-600">Track and manage all your expenses in one place</p>
+            </div>
+          </div>
+
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Total Expenses</p>
+                  <p className="text-2xl font-bold text-gray-900">{symbol}{totalExpenses.toLocaleString()}</p>
+                </div>
+                <div className="p-3 bg-gradient-to-br from-red-50 to-red-100 rounded-xl">
+                  <TrendingUp className="h-6 w-6 text-red-600" />
+                </div>
+              </div>
+            </div>
+            
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Total Transactions</p>
+                  <p className="text-2xl font-bold text-gray-900">{filteredExpenses(expenses, searchTerm).length}</p>
+                </div>
+                <div className="p-3 bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl">
+                  <Filter className="h-6 w-6 text-blue-600" />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">Average per Transaction</p>
+                  <p className="text-2xl font-bold text-gray-900">
+                    {filteredExpenses(expenses, searchTerm).length > 0 
+                      ? `${symbol}${(totalExpenses / filteredExpenses(expenses, searchTerm).length).toFixed(2)}`
+                      : `${symbol}0.00`
+                    }
+                  </p>
+                </div>
+                <div className="p-3 bg-gradient-to-br from-green-50 to-green-100 rounded-xl">
+                  <div className="w-6 h-6 bg-green-600 rounded-full flex items-center justify-center">
+                    <span className="text-white text-xs font-bold">₹</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
-        <input
-          type="text"
-          placeholder="Search by description or category..."
-          className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 bg-gray-50 shadow-sm"
-          value={searchTerm}
-          onChange={e => setSearchTerm(e.target.value)}
-        />
-        {searchTerm && (
-          <button 
-            className="absolute inset-y-0 right-0 pr-3 flex items-center"
-            onClick={() => setSearchTerm('')}
+
+        {/* Search Section */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 mb-8">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <Search className="h-5 w-5 text-gray-400" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search expenses by description or category..."
+              className="w-full pl-12 pr-12 py-4 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-gray-50 shadow-sm text-gray-900 placeholder-gray-500 transition-all duration-200"
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+            />
+            {searchTerm && (
+              <button 
+                className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 transition-colors duration-200"
+                onClick={() => setSearchTerm('')}
+              >
+                <X className="h-5 w-5" />
+              </button>
+            )}
+          </div>
+        </div>
+        
+        {/* Minimize Toggle Button */}
+        <div className="flex justify-center mb-6">
+          <button
+            onClick={() => setIsMinimized(!isMinimized)}
+            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white text-gray-700 font-medium shadow-sm border border-gray-200 hover:bg-gray-50 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200"
           >
-            <X className="h-5 w-5 text-gray-400 hover:text-gray-600" />
+            {isMinimized ? (
+              <>
+                <ChevronDown className="h-5 w-5" />
+                Show Expense Details
+              </>
+            ) : (
+              <>
+                <ChevronUp className="h-5 w-5" />
+                Minimize Expense List
+              </>
+            )}
           </button>
-        )}
-      </div>
-      
-      {expensesError ? (
-        <div className="text-center py-8 text-red-500">{expensesError}</div>
-      ) : filteredExpenses(expenses, searchTerm).length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-xl border border-gray-100">
-          <p className="text-gray-500 font-medium">No expenses found.</p>
         </div>
-      ) : (
-        <div className="space-y-4">
-          {filteredExpenses(expenses, searchTerm).map((expense) => (
-            <div key={expense.id} className="border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-              {editingId === expense.id ? (
-                <div className="p-4 bg-white">
-                  <div className="flex flex-col md:flex-row md:items-center gap-4">
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
-                      <input
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                        value={editForm.description}
-                        onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
-                        placeholder="Description"
-                      />
-                    </div>
-                    <div className="w-32">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
-                      <input
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                        type="number"
-                        value={editForm.amount}
-                        onChange={e => setEditForm(f => ({ ...f, amount: e.target.value }))}
-                        placeholder="Amount"
-                      />
-                    </div>
-                    {/* Recurring End Date field for recurring expenses */}
-                    {expense.is_recurring && (
-                      <div className="w-56">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Recurring End Date</label>
+
+        {/* Expenses List */}
+        {!isMinimized && (
+          <>
+            {expensesError ? (
+          <div className="bg-red-50 border border-red-200 rounded-2xl p-8 text-center">
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <X className="h-8 w-8 text-red-600" />
+            </div>
+            <h3 className="text-lg font-semibold text-red-800 mb-2">Error Loading Expenses</h3>
+            <p className="text-red-600">{expensesError}</p>
+          </div>
+        ) : filteredExpenses(expenses, searchTerm).length === 0 ? (
+          <div className="bg-white rounded-2xl p-12 text-center shadow-sm border border-gray-100">
+            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <Search className="h-10 w-10 text-gray-400" />
+            </div>
+            <h3 className="text-xl font-semibold text-gray-900 mb-2">No expenses found</h3>
+            <p className="text-gray-600 max-w-md mx-auto">
+              {searchTerm ? `No expenses match your search for "${searchTerm}". Try adjusting your search terms.` : 'Start adding expenses to see them appear here.'}
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredExpenses(expenses, searchTerm).map((expense) => (
+              <div key={expense.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden hover:shadow-md transition-all duration-200">
+                {editingId === expense.id ? (
+                  <div className="p-6 bg-gradient-to-r from-blue-50 to-indigo-50">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
                         <input
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                          type="date"
-                          value={editForm.recurring_end_date || ''}
-                          onChange={e => setEditForm(f => ({ ...f, recurring_end_date: e.target.value }))}
-                          placeholder="Recurring End Date"
+                          className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
+                          value={editForm.description}
+                          onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                          placeholder="Enter description"
                         />
                       </div>
-                    )}
-                    <div className="flex gap-2 self-end">
-                      <button
-                        className="px-4 py-2 rounded-lg bg-green-600 text-white font-medium text-sm shadow hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-400 transition"
-                        onClick={() => handleSaveEdit(expense.id)}
-                      >
-                        Save
-                      </button>
-                      <button
-                        className="px-4 py-2 rounded-lg bg-gray-200 text-gray-800 font-medium text-sm shadow hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-300 transition"
-                        onClick={() => setEditingId(null)}
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-white">
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-3 sm:mb-0">
-                    <div className={`${getCategoryColor(expense.category)} px-4 py-2 rounded-full text-sm font-medium w-fit`}>
-                      {expense.category}
+                      <div>
+                        <label className="block text-sm font-semibold text-gray-700 mb-2">Amount</label>
+                        <input
+                          className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
+                          type="number"
+                          value={editForm.amount}
+                          onChange={e => setEditForm(f => ({ ...f, amount: e.target.value }))}
+                          placeholder="0.00"
+                        />
+                      </div>
                       {expense.is_recurring && (
-                        <span className="ml-2 px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 text-xs font-semibold border border-blue-200 align-middle">Recurring</span>
+                        <div>
+                          <label className="block text-sm font-semibold text-gray-700 mb-2">Recurring End Date</label>
+                          <input
+                            className="w-full border border-gray-300 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200"
+                            type="date"
+                            value={editForm.recurring_end_date || ''}
+                            onChange={e => setEditForm(f => ({ ...f, recurring_end_date: e.target.value }))}
+                          />
+                        </div>
                       )}
-                    </div>
-                    <div>
-                      <p className="font-medium text-gray-900 text-lg">{expense.description}</p>
-                      <div className="flex items-center gap-1 text-sm text-gray-500 mt-1">
-                        <Calendar className="h-4 w-4" />
-                        <span>{new Date(expense.date).toLocaleDateString()}</span>
+                      <div className="flex gap-3">
+                        <button
+                          className="flex-1 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white font-semibold shadow-sm hover:from-emerald-600 hover:to-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2 transition-all duration-200 flex items-center justify-center gap-2"
+                          onClick={() => handleSaveEdit(expense.id)}
+                        >
+                          <Save className="h-4 w-4" />
+                          Save
+                        </button>
+                        <button
+                          className="px-4 py-3 rounded-xl bg-gray-100 text-gray-700 font-semibold hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 transition-all duration-200 flex items-center justify-center gap-2"
+                          onClick={() => setEditingId(null)}
+                        >
+                          <XCircle className="h-4 w-4" />
+                          Cancel
+                        </button>
                       </div>
                     </div>
                   </div>
-                  
-                  <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto">
-                    <p className="text-lg font-bold text-gray-900">{symbol}{expense.amount.toLocaleString()}</p>
-                    <div className="flex gap-2">
-                      <button
-                        className="px-4 py-2 rounded-lg bg-yellow-400 text-gray-900 font-medium text-sm shadow hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-yellow-300 transition"
-                        onClick={() => handleStartEdit(expense)}
-                      >
-                        Update
-                      </button>
-                      <button
-                        className="px-4 py-2 rounded-lg bg-red-600 text-white font-medium text-sm shadow hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-400 transition"
-                        onClick={() => handleDeleteExpense(expense.id)}
-                      >
-                        Delete
-                      </button>
+                ) : (
+                  <div className="p-6">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-4 flex-1">
+                        <div className={`${getCategoryColor(expense.category)} px-4 py-2.5 rounded-full text-sm font-semibold border flex items-center gap-2`}>
+                          <span>{expense.category}</span>
+                          {expense.is_recurring && (
+                            <span className="px-2 py-1 rounded-full bg-blue-100 text-blue-800 text-xs font-bold border border-blue-200">
+                              Recurring
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-gray-900 text-lg mb-1">
+                            {expense.description || 'No description'}
+                          </h3>
+                          <div className="flex items-center gap-2 text-sm text-gray-500">
+                            <Calendar className="h-4 w-4" />
+                            <span>{new Date(expense.date).toLocaleDateString('en-GB', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              year: 'numeric'
+                            })}</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                                                 <div className="text-right">
+                           <p className="text-lg font-bold text-gray-900">{symbol}{expense.amount.toLocaleString()}</p>
+                         </div>
+                                                 <div className="flex gap-2">
+                           <button
+                             className="p-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-amber-500 text-gray-900 shadow-sm hover:from-amber-500 hover:to-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 transition-all duration-200"
+                             onClick={() => handleStartEdit(expense)}
+                             title="Edit expense"
+                           >
+                             <Edit3 className="h-4 w-4" />
+                           </button>
+                           <button
+                             className="p-2.5 rounded-xl bg-gradient-to-r from-red-500 to-red-600 text-white shadow-sm hover:from-red-600 hover:to-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-all duration-200"
+                             onClick={() => handleDeleteExpense(expense.id)}
+                             title="Delete expense"
+                           >
+                             <Trash2 className="h-4 w-4" />
+                           </button>
+                         </div>
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+          </>
+        )}
+
+        {/* Minimized Summary View */}
+        {isMinimized && (
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100 text-center">
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <div className="w-12 h-12 bg-gradient-to-br from-indigo-50 to-purple-50 rounded-full flex items-center justify-center">
+                <TrendingUp className="h-6 w-6 text-indigo-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Expense Summary</h3>
+                <p className="text-sm text-gray-600">Click below to view detailed expenses</p>
+              </div>
             </div>
-          ))}
-        </div>
-      )}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-gray-900">{filteredExpenses(expenses, searchTerm).length}</p>
+                <p className="text-sm text-gray-600">Total Transactions</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-gray-900">{symbol}{totalExpenses.toLocaleString()}</p>
+                <p className="text-sm text-gray-600">Total Amount</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-gray-900">
+                  {filteredExpenses(expenses, searchTerm).length > 0 
+                    ? `${symbol}${(totalExpenses / filteredExpenses(expenses, searchTerm).length).toFixed(2)}`
+                    : `${symbol}0.00`
+                  }
+                </p>
+                <p className="text-sm text-gray-600">Average</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
