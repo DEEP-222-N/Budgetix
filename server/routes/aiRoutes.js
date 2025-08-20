@@ -353,7 +353,7 @@ router.post('/suggest-budget', async (req, res) => {
       `   - Utilities: ₹3,000\n` +
       `   - Entertainment: ₹2,000\n` +
       `   - Other: ₹5,000\n\n` +
-      `*Note: This is a general suggestion. For personalized advice, please complete your profile with accurate financial details.*`,
+      `*Note: This is a general suggestion based on standard budgeting principles. For personalized advice, please complete your profile with accurate financial details. You can then use the AI advisor to get customized recommendations based on your actual spending patterns from the app.*`,
       isFallback: true
     };
     
@@ -438,6 +438,36 @@ router.post('/scan-receipt', async (req, res) => {
   } catch (error) {
     console.error('scan-receipt error:', error);
     res.status(500).json({ success: false, error: 'Failed to scan receipt' });
+  }
+});
+
+// Monthly insights endpoint
+router.post('/monthly-insights', async (req, res) => {
+  try {
+    const { userId, reportData } = req.body;
+    
+    if (!userId || !reportData) {
+      return res.status(400).json({ 
+        error: 'userId and reportData are required' 
+      });
+    }
+
+    console.log('Generating monthly insights for user:', userId);
+    
+    // Generate AI insights using the AI service
+    const insights = await aiService.generateMonthlyInsights(reportData);
+    
+    return res.json({
+      success: true,
+      insights
+    });
+
+  } catch (error) {
+    console.error('Error in monthly-insights endpoint:', error);
+    return res.status(500).json({ 
+      error: 'Failed to generate monthly insights',
+      details: error.message 
+    });
   }
 });
 

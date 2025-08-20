@@ -8,6 +8,7 @@ import LandingPage from './components/LandingPage';
 import Signup from './components/Signup';
 import BudgetManager from './components/BudgetManager';
 import AllExpenses from './components/AllExpenses';
+import MonthlyReport from './components/MonthlyReport';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CurrencyProvider } from './context/CurrencyContext';
 import { BudgetProvider } from './context/BudgetContext';
@@ -47,6 +48,7 @@ function AppContent() {
             <Route path="/add-expense" element={<AddExpense />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/all-expenses" element={<AllExpenses />} />
+            <Route path="/monthly-report" element={<MonthlyReport />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </main>

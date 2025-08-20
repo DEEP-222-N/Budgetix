@@ -1,8 +1,139 @@
 import React, { useState, useEffect } from 'react';
-import { Target, Percent, Calendar, AlertCircle, Save, X, Brain, Sparkles, Loader2, TrendingUp, DollarSign, PieChart, BarChart3, Settings, Zap, CheckCircle } from 'lucide-react';
+import { Target, Percent, Calendar, AlertCircle, Save, X, Brain, Sparkles, Loader2, TrendingUp, Wallet, PieChart, BarChart3, Settings, Zap, CheckCircle, Info } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { useBudget } from '../context/BudgetContext';
+function TotalIncomeSummary({ monthlyBudget, extraIncomes, symbol }) {
+  const net = Number(monthlyBudget) || 0;
+  const extra = extraIncomes.reduce((sum, inc) => sum + (Number(inc.amount) || 0), 0);
+  const total = net + extra;
+  return (
+    <div className="mb-4 p-3 rounded-lg bg-green-50 border border-green-100 flex flex-col md:flex-row md:items-center md:gap-6 text-green-900 font-semibold">
+      <span>Total Budget for this Month:</span>
+      <span className="ml-2">{symbol}{total.toLocaleString()} <span className="text-xs text-gray-500 font-normal">(Net: {symbol}{net.toLocaleString()} + Extra: {symbol}{extra.toLocaleString()})</span></span>
+    </div>
+  );
+}
+
+function ExtraIncomeSection({ symbol, addExtraIncome, removeExtraIncome, incomes }) {
+  const [label, setLabel] = React.useState('');
+  const [amount, setAmount] = React.useState('');
+  const [inputError, setInputError] = React.useState('');
+  const [isEditing, setIsEditing] = React.useState(false);
+
+  const handleAdd = (e) => {
+    e.preventDefault();
+    if (!label.trim() || !amount.trim()) {
+      setInputError('Please enter both label and amount');
+      return;
+    }
+    if (isNaN(Number(amount)) || Number(amount) <= 0) {
+      setInputError('Amount must be a positive number');
+      return;
+    }
+    addExtraIncome({ label: label.trim(), amount: Number(amount) });
+    setLabel('');
+    setAmount('');
+    setInputError('');
+    setIsEditing(false);
+  };
+
+  return (
+    <div>
+      {incomes.length === 0 ? (
+        <form onSubmit={handleAdd} className="flex flex-col md:flex-row gap-3 mb-4">
+          <input
+            type="text"
+            placeholder="Source (e.g. FD, Bonus)"
+            className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-100"
+            value={label}
+            onChange={e => setLabel(e.target.value)}
+            maxLength={40}
+          />
+          <input
+            type="number"
+            min="1"
+            placeholder="Amount"
+            className="w-32 px-4 py-2 rounded-lg border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-100"
+            value={amount}
+            onChange={e => setAmount(e.target.value)}
+          />
+          <button
+            type="submit"
+            className="px-5 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold shadow-md"
+          >
+            Add
+          </button>
+        </form>
+      ) : (
+        <div className="mb-4">
+          <div className="flex justify-between items-center p-3 bg-gray-50 rounded-lg border border-gray-200">
+            <div>
+              <span className="font-medium text-gray-800">{incomes[0].label}</span>
+              <span className="ml-3 text-green-700 font-semibold">+{symbol}{incomes[0].amount.toLocaleString()}</span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setLabel(incomes[0].label);
+                  setAmount(incomes[0].amount);
+                  removeExtraIncome(0);
+                  setIsEditing(true);
+                }}
+                className="px-3 py-1 text-sm bg-blue-100 text-blue-700 rounded hover:bg-blue-200"
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => removeExtraIncome(0)}
+                className="p-1 text-red-500 hover:text-red-700 rounded"
+                title="Delete"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+          {isEditing && (
+            <form onSubmit={handleAdd} className="mt-3 flex flex-col md:flex-row gap-3">
+              <input
+                type="text"
+                placeholder="Source (e.g. FD, Bonus)"
+                className="flex-1 px-4 py-2 rounded-lg border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                value={label}
+                onChange={e => setLabel(e.target.value)}
+                maxLength={40}
+              />
+              <input
+                type="number"
+                min="1"
+                placeholder="Amount"
+                className="w-32 px-4 py-2 rounded-lg border border-gray-300 focus:border-green-500 focus:ring-2 focus:ring-green-100"
+                value={amount}
+                onChange={e => setAmount(e.target.value)}
+              />
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white font-semibold shadow-md"
+                >
+                  Update
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsEditing(false)}
+                  className="px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
+      {inputError && <div className="text-red-600 mb-2 text-sm">{inputError}</div>}
+    </div>
+  );
+}
 
 const allCategories = [
   'Food',
@@ -55,10 +186,81 @@ const BudgetManager = () => {
   const [achievableGoal, setAchievableGoal] = useState('');
   const [monthsToAchieveGoal, setMonthsToAchieveGoal] = useState('');
 
+  // Extra income state: { 'YYYY-MM': [ { label: '', amount: 0 }, ... ] }
+  const [extraIncomes, setExtraIncomes] = useState({});
+
+  // Helper to get the key for the selected month/year
+  const getMonthKey = (month, year) => `${year}-${String(month + 1).padStart(2, '0')}`;
+
+  // Get extra incomes for selected month
+  const getCurrentMonthExtraIncomes = () => {
+    const key = getMonthKey(selectedMonth, selectedYear);
+    return extraIncomes[key] || [];
+  };
+
+  // Add or update extra income for selected month (only one allowed per month)
+  const addExtraIncome = async (income) => {
+    const key = getMonthKey(selectedMonth, selectedYear);
+    
+    // Always replace any existing income with the new one
+    setExtraIncomes(prev => ({
+      ...prev,
+      [key]: [income] // Only one extra income per month
+    }));
+    
+    // Update the extra income fields in Supabase for this month/year
+    if (user && supabase) {
+      const { error } = await supabase
+        .from('budgets')
+        .upsert({
+          user_id: user.id,
+          budget_month: monthNames[selectedMonth],
+          budget_year: selectedYear,
+          extra_income_amount: income.amount,
+          extra_income_source: income.label,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'user_id,budget_month,budget_year',
+          ignoreDuplicates: false
+        });
+        
+      if (error) {
+        console.error('Error saving extra income:', error);
+        // Revert the UI if the save fails
+        setExtraIncomes(prev => {
+          const newState = { ...prev };
+          delete newState[key];
+          return newState;
+        });
+        return false;
+      }
+    }
+    return true;
+  };
+
+  // Remove extra income by index for selected month and update Supabase
+  const removeExtraIncome = async (idx) => {
+    const key = getMonthKey(selectedMonth, selectedYear);
+    const updatedIncomes = (extraIncomes[key] || []).filter((_, i) => i !== idx);
+    setExtraIncomes(prev => ({
+      ...prev,
+      [key]: updatedIncomes
+    }));
+    // If removing, clear the extra income fields in Supabase for this month/year
+    if (user && supabase) {
+      await supabase
+        .from('budgets')
+        .update({ extra_income_amount: 0, extra_income_source: null })
+        .eq('user_id', user.id)
+        .eq('budget_month', monthNames[selectedMonth])
+        .eq('budget_year', selectedYear);
+    }
+  };
 
   const [showError, setShowError] = useState(false);
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
 
+  // ... rest of the code remains the same ...
  
   const [aiPromptResponse, setAiPromptResponse] = useState(null);
   // Add state for custom budget breakdown and loading
@@ -172,13 +374,19 @@ const BudgetManager = () => {
           console.log('✅ Loaded monthly budget data:', budgetData);
           console.log('📅 Budget period:', budgetData.budget_month, budgetData.budget_year);
           setMonthlyBudget(budgetData.monthly_budget_total);
-          
+          // Load extra income from Supabase
+          const key = getMonthKey(selectedMonth, selectedYear);
+          setExtraIncomes(prev => ({
+            ...prev,
+            [key]: (budgetData.extra_income_amount && budgetData.extra_income_source)
+              ? [{ label: budgetData.extra_income_source, amount: Number(budgetData.extra_income_amount) }]
+              : []
+          }));
           // Load budget settings fields
           setMonthlySavingsGoal(budgetData.monthly_savings_goal ? String(budgetData.monthly_savings_goal) : '');
           setMonthlyInvestmentGoal(budgetData.monthly_investment_goal ? String(budgetData.monthly_investment_goal) : '');
           setAchievableGoal(budgetData.achievable_goal || '');
           setMonthsToAchieveGoal(budgetData.months_to_achieve_goal ? String(budgetData.months_to_achieve_goal) : '');
-          
           setCategoryBudgets(allCategories.map(name => {
             const dbName = getCategoryColumnName(name);
             return {
@@ -456,8 +664,8 @@ const BudgetManager = () => {
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Budget Manager</h1>
         <p className="text-gray-600">Manage your budget goals and category allocations</p>
       </div>
-      {/* AI Budget Advisor Section */}
-      <div className="bg-gradient-to-br from-white via-blue-50/30 to-indigo-50/50 rounded-2xl shadow-xl border border-gray-200/60 p-8 mb-8 overflow-hidden relative">
+
+<div className="bg-gradient-to-br from-white via-blue-50/30 to-indigo-50/50 rounded-2xl shadow-xl border border-gray-200/60 p-8 mb-8 overflow-hidden relative">
         {/* Background decorative elements */}
         <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-100/40 to-purple-100/40 rounded-full -translate-y-16 translate-x-16 blur-2xl"></div>
         <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-indigo-100/40 to-blue-100/40 rounded-full translate-y-12 -translate-x-12 blur-xl"></div>
@@ -478,7 +686,7 @@ const BudgetManager = () => {
           <div className="mb-6">
             <label htmlFor="goal" className="block text-sm font-semibold text-gray-700 mb-3">
               What's your financial goal?
-              <span className="text-xs font-normal text-gray-500 ml-2">Include amount, timeline, and purpose (e.g., "I want to save ₹5 lakhs for a house down payment in 2 years")</span>
+              <span className="text-xs font-normal text-gray-500 ml-2">Include amount, timeline, and purpose (e.g., "I want to save 500000 for a house down payment in 2 years")</span>
             </label>
             <div className="flex gap-3">
               <div className="flex-1 relative">
@@ -713,7 +921,7 @@ const BudgetManager = () => {
                     <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6 mt-4 shadow-lg">
                       <div className="flex items-center gap-3 mb-4">
                         <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center">
-                          <DollarSign className="h-5 w-5 text-white" />
+                          <Wallet className="h-5 w-5 text-white" />
                         </div>
                         <h4 className="text-xl font-bold text-green-900">Your 50/30/20 Custom Budget</h4>
                         </div>
@@ -729,7 +937,7 @@ const BudgetManager = () => {
                           <div className="text-xl font-bold text-green-700">₹{customBudget.aiSuggestedSavings.toLocaleString()}</div>
                       </div>
                         <div className="bg-white p-4 rounded-lg border border-green-200/60">
-                          <div className="text-sm text-gray-600 mb-1">Remaining for 50/30/20</div>
+                          <div className="text-sm text-gray-600 mb-1">Remaining for Budget</div>
                           <div className="text-xl font-bold text-green-700">₹{customBudget.remaining.toLocaleString()}</div>
                         </div>
                       </div>
@@ -864,6 +1072,53 @@ const BudgetManager = () => {
           )}
         </div>
       </div>
+      {/* Extra Income Section */}
+      <div className="bg-gradient-to-br from-white via-green-50/30 to-emerald-50/50 p-8 rounded-2xl shadow-xl border border-green-200/60 w-full mb-8 relative overflow-hidden">
+        {/* Background decorative elements */}
+        <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-green-100/40 to-emerald-100/40 rounded-full -translate-y-12 translate-x-12 blur-xl"></div>
+        <div className="absolute bottom-0 left-0 w-20 h-20 bg-gradient-to-tr from-teal-100/40 to-green-100/40 rounded-full translate-y-10 -translate-x-10 blur-lg"></div>
+        
+        {/* Header */}
+        <div className="flex items-center space-x-4 mb-6 relative z-10">
+          <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center shadow-lg">
+            <TrendingUp className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">Extra Income</h2>
+            <p className="text-base text-gray-500">Add any additional income for {monthNames[selectedMonth]} {selectedYear}</p>
+          </div>
+        </div>
+        
+        {/* Extra Income Content */}
+        <div className="relative z-10 space-y-6">
+          <div className="bg-white/80 backdrop-blur-sm p-6 rounded-xl border border-green-100 shadow-sm">
+            <TotalIncomeSummary 
+              monthlyBudget={monthlyBudget} 
+              extraIncomes={getCurrentMonthExtraIncomes()} 
+              symbol={symbol} 
+            />
+            <ExtraIncomeSection 
+              symbol={symbol}
+              addExtraIncome={addExtraIncome}
+              removeExtraIncome={removeExtraIncome}
+              incomes={getCurrentMonthExtraIncomes()}
+            />
+          </div>
+          <div className="bg-blue-50/50 border-l-4 border-blue-400 p-4 rounded-r-lg">
+            <div className="flex">
+              <div className="flex-shrink-0">
+                <Info className="h-5 w-5 text-blue-400" />
+              </div>
+              <div className="ml-3">
+                <p className="text-sm text-blue-700">
+                  Include any one-time or irregular income like bonuses, gifts, or investment returns. This helps in better financial planning.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Combined Budget Settings and Categories */}
       <div className="bg-gradient-to-br from-white via-gray-50/30 to-blue-50/20 p-8 rounded-2xl shadow-xl border border-gray-200/60 w-full mb-8 relative overflow-hidden">
         {/* Background decorative elements */}
@@ -1110,7 +1365,16 @@ const BudgetManager = () => {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-white p-4 rounded-lg border border-purple-200/60">
                 <div className="text-sm text-gray-600 mb-1">Total Budget</div>
-                <div className="text-xl font-bold text-purple-700">₹{monthlyBudget ? monthlyBudget.toLocaleString() : '0'}</div>
+                {(() => {
+  const extra = getCurrentMonthExtraIncomes().reduce((sum, inc) => sum + (Number(inc.amount) || 0), 0);
+  const total = (Number(monthlyBudget) || 0) + extra;
+  return (
+    <div>
+      <div className="text-xl font-bold text-purple-700">{symbol}{total.toLocaleString()}</div>
+      <div className="text-xs text-gray-500 mt-1">(Base: {symbol}{(Number(monthlyBudget)||0).toLocaleString()} + Extra: {symbol}{extra.toLocaleString()})</div>
+    </div>
+  );
+})()}
                 </div>
               <div className="bg-white p-4 rounded-lg border border-purple-200/60">
                 <div className="text-sm text-gray-600 mb-1">Savings Goal</div>

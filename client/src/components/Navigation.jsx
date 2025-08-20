@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Home, Plus, Settings, LogOut, UserCircle, Target } from 'lucide-react';
+import { Home, Plus, Settings, LogOut, UserCircle, Target, FileText } from 'lucide-react';
 import budgetixLogo from '../assets/image-removebg-preview (4).png';
 import { useAuth } from '../context/AuthContext';
 
@@ -175,6 +175,17 @@ const Navigation = () => {
                       {profileIncomplete && (
                         <span className="absolute -top-2 left-16 bg-red-600 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center font-bold border-2 border-white">1</span>
                       )}
+                    </div>
+                  </Link>
+
+                  <Link 
+                    to="/monthly-report" 
+                    className="block px-4 py-2 text-gray-700 hover:bg-purple-50 transition-colors duration-150"
+                    onClick={() => setShowDropdown(false)}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <FileText className="h-4 w-4 text-purple-600" />
+                      <span>Reports</span>
                     </div>
                   </Link>
                   
