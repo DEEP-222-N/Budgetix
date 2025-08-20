@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Target, Percent, Calendar, AlertCircle, Save, X, Brain, Sparkles, Loader2 } from 'lucide-react';
+import { Target, Percent, Calendar, AlertCircle, Save, X, Brain, Sparkles, Loader2, TrendingUp, DollarSign, PieChart, BarChart3, Settings, Zap, CheckCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { useBudget } from '../context/BudgetContext';
@@ -23,6 +23,10 @@ const BudgetManager = () => {
   const { user, supabase } = useAuth();
   const { currency, setCurrency, symbol } = useCurrency();
   const { monthlyBudget, setMonthlyBudget } = useBudget();
+  
+  
+  // Simple styling for AI financial report
+  
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiSuggestion, setAiSuggestion] = useState('');
   const [isLoadingAi, setIsLoadingAi] = useState(false);
@@ -40,22 +44,22 @@ const BudgetManager = () => {
   const [categoryBudgets, setCategoryBudgets] = useState(
     allCategories.map(name => ({ name, budget: 200, current: 0 }))
   );
-  // Add a state to track the input string for each category (for UI only)
+ 
   const [categoryBudgetInputs, setCategoryBudgetInputs] = useState(
     allCategories.map(() => undefined)
   );
-  // Add a state for the monthly budget input string (for UI only)
+  
   const [monthlyBudgetInput, setMonthlyBudgetInput] = useState(undefined);
   const [monthlySavingsGoal, setMonthlySavingsGoal] = useState('');
   const [monthlyInvestmentGoal, setMonthlyInvestmentGoal] = useState('');
   const [achievableGoal, setAchievableGoal] = useState('');
   const [monthsToAchieveGoal, setMonthsToAchieveGoal] = useState('');
 
-  // Alert dismiss logic
+
   const [showError, setShowError] = useState(false);
   const [showSuccessAlert, setShowSuccessAlert] = useState(false);
 
-  // Add state for aiPromptResponse at the top of the component
+ 
   const [aiPromptResponse, setAiPromptResponse] = useState(null);
   // Add state for custom budget breakdown and loading
   const [customBudget, setCustomBudget] = useState(null);
@@ -65,7 +69,7 @@ const BudgetManager = () => {
   const [autoFillDone, setAutoFillDone] = useState(false);
   const [autoFillDeclined, setAutoFillDeclined] = useState(false);
 
-  // Month/Year selection for budgeting period (UI only for now)
+ 
   const now = new Date();
   const monthNames = [
     'January', 'February', 'March', 'April', 'May', 'June',
@@ -91,19 +95,44 @@ const BudgetManager = () => {
     }
   }, [error]);
 
+  // REMOVED: Auto-saving useEffect hooks that were causing conflicts
+  // localStorage is now only saved when explicitly needed
+
+  // Load valid data from localStorage on component mount
+  useEffect(() => {
+    const savedSuggestion = localStorage.getItem('aiSuggestion');
+    const savedPrompt = localStorage.getItem('aiPrompt');
+    
+    console.log('🔄 Loading from localStorage:', { savedSuggestion: savedSuggestion?.substring(0, 50), savedPrompt: savedPrompt?.substring(0, 50) });
+    
+    // Simply load whatever data exists - no validation, no clearing
+    if (savedSuggestion && savedPrompt) {
+      console.log('✅ Loading both prompt and suggestion');
+      setAiSuggestion(savedSuggestion);
+      setAiPrompt(savedPrompt);
+    } else if (savedSuggestion) {
+      console.log('✅ Loading suggestion only');
+      setAiSuggestion(savedSuggestion);
+    } else if (savedPrompt) {
+      console.log('✅ Loading prompt only');
+      setAiPrompt(savedPrompt);
+    } else {
+      console.log('ℹ️ No data found in localStorage');
+    }
+  }, []);
+
   // When loading the monthly budget, reset the input string to undefined
   useEffect(() => {
     setMonthlyBudgetInput(undefined);
   }, [monthlyBudget]);
 
   
-  // Handler for input change
   const handleMonthlyBudgetInputChange = (value) => {
     if (/^\d*$/.test(value)) {
       setMonthlyBudgetInput(value);
     }
   };
-  // On blur, update the actual budget value
+ 
   const handleMonthlyBudgetInputBlur = () => {
     setMonthlyBudget(monthlyBudgetInput === '' || monthlyBudgetInput === undefined ? 0 : Number(monthlyBudgetInput));
     setMonthlyBudgetInput(undefined);
@@ -115,7 +144,7 @@ const BudgetManager = () => {
       setLoading(true);
       setError(null);
       try {
-        // Fetch budget for the selected month & year
+     
         const { data: budgetData, error: budgetError } = await supabase
           .from('budgets')
           .select('*')
@@ -326,9 +355,45 @@ const BudgetManager = () => {
     e.preventDefault();
     if (!aiPrompt.trim()) return;
     
+              // Enhanced validation for meaningful financial goals
+     const prompt = aiPrompt.trim();
+     if (prompt.length < 10) {
+       setAiError('Please provide a more detailed financial goal (at least 10 characters).');
+       return;
+     }
+     
+     // Check for basic financial context
+     const financialKeywords = ['buy', 'save', 'invest', 'goal', 'money', 'house', 'car', 'education', 'travel', 'wedding', 'business', 'retirement', 'emergency', 'fund', 'lakh', 'crore', 'thousand', 'million', 'billion'];
+     const hasFinancialContext = financialKeywords.some(keyword => prompt.toLowerCase().includes(keyword));
+     
+     if (!hasFinancialContext) {
+       setAiError('Please include financial context like "save", "buy", "invest", or specific amounts with "lakh", "crore", etc.');
+       return;
+     }
+     
+     // Check for amount and timeline
+     const hasAmount = /\d+/.test(prompt);
+     const hasTimeline = /(?:in|for|within|by|months?|years?|yrs?|mos?)/i.test(prompt);
+     
+     if (!hasAmount || !hasTimeline) {
+       setAiError('Please include both an amount (e.g., "5 lakhs", "₹50,000") and a timeline (e.g., "in 2 years", "within 6 months").');
+       return;
+     }
+    
     setIsLoadingAi(true);
     setAiError('');
     setAiSuggestion('');
+    
+    // Clear previous custom budget data when starting new AI suggestion
+    setCustomBudget(null);
+    setCustomBudgetError('');
+    setAiPromptResponse(null);
+    setAutoFillDone(false);
+    setAutoFillDeclined(false);
+    
+    // Clear localStorage for clean workflow
+    localStorage.removeItem('aiSuggestion');
+    // Don't clear the prompt yet - keep it until we get a new suggestion
     
     try {
       console.log('Sending request to AI endpoint with prompt:', aiPrompt);
@@ -355,7 +420,12 @@ const BudgetManager = () => {
       }
       
       console.log('AI Suggestion received:', responseData);
-      setAiSuggestion(responseData.suggestion || 'No suggestion provided');
+       const newSuggestion = responseData.suggestion || 'No suggestion provided';
+       setAiSuggestion(newSuggestion);
+       
+       // Save both prompt and suggestion to localStorage immediately
+       localStorage.setItem('aiPrompt', aiPrompt.trim());
+       localStorage.setItem('aiSuggestion', newSuggestion);
     } catch (err) {
       console.error('Error getting AI suggestion:', err);
       setAiError(err.message || 'Failed to get suggestion. Please try again.');
@@ -387,40 +457,57 @@ const BudgetManager = () => {
         <p className="text-gray-600">Manage your budget goals and category allocations</p>
       </div>
       {/* AI Budget Advisor Section */}
-      <div className="bg-white rounded-lg shadow p-6 mb-8">
-        <div className="flex items-center mb-4">
-          <Brain className="h-6 w-6 text-indigo-600 mr-2" />
-          <h2 className="text-xl font-semibold">AI Budget Advisor</h2>
+      <div className="bg-gradient-to-br from-white via-blue-50/30 to-indigo-50/50 rounded-2xl shadow-xl border border-gray-200/60 p-8 mb-8 overflow-hidden relative">
+        {/* Background decorative elements */}
+        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-blue-100/40 to-purple-100/40 rounded-full -translate-y-16 translate-x-16 blur-2xl"></div>
+        <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-indigo-100/40 to-blue-100/40 rounded-full translate-y-12 -translate-x-12 blur-xl"></div>
+        
+        {/* Header */}
+        <div className="flex items-center mb-8 relative z-10">
+          <div className="p-3 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-xl shadow-lg mr-4">
+            <Brain className="h-7 w-7 text-white" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-1">AI Budget Advisor</h2>
+            <p className="text-gray-600 text-sm">Get personalized financial guidance powered by AI</p>
+          </div>
         </div>
         
-        <form onSubmit={handleAiSuggestion} className="mb-6">
-          <div className="mb-4">
-            <label htmlFor="goal" className="block text-sm font-medium text-gray-700 mb-2">
-              What's your financial goal? (e.g., "I want to buy a bike worth 100000 in 2 years")
+        {/* Input Form */}
+        <form onSubmit={handleAiSuggestion} className="mb-8 relative z-10">
+          <div className="mb-6">
+            <label htmlFor="goal" className="block text-sm font-semibold text-gray-700 mb-3">
+              What's your financial goal?
+              <span className="text-xs font-normal text-gray-500 ml-2">Include amount, timeline, and purpose (e.g., "I want to save ₹5 lakhs for a house down payment in 2 years")</span>
             </label>
-            <div className="flex gap-2">
+            <div className="flex gap-3">
+              <div className="flex-1 relative">
               <input
                 type="text"
                 id="goal"
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
-                className="flex-1 rounded-md border border-gray-300 px-4 py-2 focus:ring-indigo-500 focus:border-indigo-500"
-                placeholder="I want to buy a bike worth 100000 in 2 years"
+                  className="w-full px-6 py-4 rounded-xl border-2 border-gray-200 focus:ring-4 focus:ring-indigo-100 focus:border-indigo-400 bg-white text-gray-900 placeholder-gray-400 transition-all duration-300 shadow-sm hover:shadow-md"
+                  placeholder="e.g., Save ₹5 lakhs for house down payment in 2 years..."
                 disabled={isLoadingAi}
               />
+                <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+                  <div className="w-2 h-2 bg-gradient-to-r from-indigo-400 to-purple-500 rounded-full"></div>
+                </div>
+              </div>
               <button
                 type="submit"
                 disabled={!aiPrompt.trim() || isLoadingAi}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center px-8 py-4 border border-transparent text-base font-semibold rounded-xl shadow-lg text-white bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 focus:outline-none focus:ring-4 focus:ring-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300 transform hover:-translate-y-0.5 disabled:transform-none"
               >
                 {isLoadingAi ? (
                   <>
-                    <Loader2 className="animate-spin -ml-1 mr-2 h-4 w-4" />
+                    <Loader2 className="animate-spin -ml-1 mr-3 h-5 w-5" />
                     Analyzing...
                   </>
                 ) : (
                   <>
-                    <Sparkles className="-ml-1 mr-2 h-4 w-4" />
+                    <Sparkles className="-ml-1 mr-3 h-5 w-5" />
                     Get Suggestion
                   </>
                 )}
@@ -429,28 +516,152 @@ const BudgetManager = () => {
           </div>
         </form>
 
+        {/* Error Display */}
         {aiError && (
-          <div className="p-4 mb-4 text-sm text-red-700 bg-red-100 rounded-lg">
-            {aiError}
+          <div className="p-4 mb-6 text-sm text-red-700 bg-gradient-to-r from-red-50 to-red-100 rounded-xl border border-red-200 relative z-10">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+              <span className="font-medium">Error:</span>
+              <span>{aiError}</span>
+            </div>
           </div>
         )}
 
+        {/* AI Suggestion Display */}
         {aiSuggestion && (
           <>
-            <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-              <h3 className="font-medium text-gray-900 mb-2">Your Personalized Budget Plan</h3>
+            <div className="bg-gradient-to-br from-gray-50 to-blue-50/30 p-8 rounded-xl border border-gray-200/60 mb-6 relative z-10 shadow-lg">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                  <PieChart className="h-5 w-5 text-white" />
+                </div>
+                                 <div className="flex-1">
+                   <h3 className="text-xl font-bold text-gray-900">Your Personalized Budget Plan</h3>
+                   <p className="text-sm text-gray-600 mt-1">AI-generated financial analysis and recommendations</p>
+                 </div>
+                                   <button
+                    onClick={() => {
+                      setAiSuggestion('');
+                      setAiPrompt('');
+                      setCustomBudget(null);
+                      setCustomBudgetError('');
+                      setAiPromptResponse(null);
+                      setAutoFillDone(false);
+                      setAutoFillDeclined(false);
+                      localStorage.removeItem('aiSuggestion');
+                      localStorage.removeItem('aiPrompt');
+                    }}
+                    className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                    title="Clear AI suggestion"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+              </div>
               <div 
-                className="prose max-w-none text-gray-700"
-                dangerouslySetInnerHTML={{ 
-                  __html: aiSuggestion.replace(/\n/g, '<br />')
-                }} 
-              />
+                className="prose max-w-none text-gray-700 bg-white p-8 rounded-xl border border-gray-200/60 shadow-lg"
+                style={{
+                  '--tw-prose-headings': '#1f2937',
+                  '--tw-prose-links': '#3b82f6',
+                  '--tw-prose-bold': '#1f2937',
+                  '--tw-prose-counters': '#6b7280',
+                  '--tw-prose-bullets': '#d1d5db',
+                  '--tw-prose-hr': '#e5e7eb',
+                  '--tw-prose-quotes': '#1f2937',
+                  '--tw-prose-quote-borders': '#e5e7eb',
+                  '--tw-prose-captions': '#6b7280',
+                  '--tw-prose-code': '#1f2937',
+                  '--tw-prose-pre-code': '#e5e7eb',
+                  '--tw-prose-pre-bg': '#1f2937',
+                  '--tw-prose-invert-headings': '#f9fafb',
+                  '--tw-prose-invert-links': '#60a5fa',
+                  '--tw-prose-invert-bold': '#f9fafb',
+                  '--tw-prose-invert-counters': '#9ca3af',
+                  '--tw-prose-invert-bullets': '#4b5563',
+                  '--tw-prose-invert-hr': '#374151',
+                  '--tw-prose-invert-quotes': '#f9fafb',
+                  '--tw-prose-invert-quote-borders': '#374151',
+                  '--tw-prose-invert-captions': '#9ca3af',
+                  '--tw-prose-invert-code': '#f9fafb',
+                  '--tw-prose-invert-pre-code': '#d1d5db',
+                  '--tw-prose-invert-pre-bg': '#111827'
+                }}
+              >
+                
+                                                   <div 
+                    className="ai-financial-report"
+                    style={{
+                      fontSize: '1rem',
+                      lineHeight: '1.8',
+                      color: '#374151'
+                    }}
+                  >
+                    {aiSuggestion.split('\n').map((line, index) => {
+                      // Clean the line completely - remove ALL hash symbols, stars, and special characters
+                      let cleanLine = line.trim();
+                      
+                      // Remove hash symbols from anywhere in the line
+                      cleanLine = cleanLine.replace(/#/g, '');
+                      
+                      // Remove star symbols from anywhere in the line
+                      cleanLine = cleanLine.replace(/\*/g, '');
+                      
+                      // Skip empty lines
+                      if (!cleanLine) {
+                        return <div key={index} className="h-2"></div>;
+                      }
+                      
+                      // Check if it was originally a heading (starts with ## or ###)
+                      if (line.startsWith('##') || line.startsWith('###')) {
+                        return (
+                          <h3 key={index} className="text-lg font-semibold text-gray-800 mb-3 mt-4">
+                            {cleanLine}
+                          </h3>
+                        );
+                      }
+                      
+                      // Check if it was originally a bullet point
+                      if (line.startsWith('-') || line.startsWith('•') || line.startsWith('*')) {
+                        return (
+                          <div key={index} className="flex items-start mb-2">
+                            <span className="text-gray-500 mr-2 w-4 text-center">•</span>
+                            <span className="text-gray-700">{cleanLine}</span>
             </div>
-            <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
-              <p className="mb-3 font-medium text-blue-900">Do you want the AI to build a customized AI budget?</p>
-              <div className="flex gap-4">
+                        );
+                      }
+                      
+                      // Check if it was originally a numbered list
+                      if (/^\d+\./.test(line)) {
+                        const number = line.match(/^\d+/)[0];
+                        return (
+                          <div key={index} className="flex items-start mb-2">
+                            <span className="text-gray-500 mr-2 font-medium w-6 text-center">{number}.</span>
+                            <span className="text-gray-700">{cleanLine.replace(/^\d+\.\s*/, '')}</span>
+                          </div>
+                        );
+                      }
+                      
+                      // Regular text
+                      return (
+                        <p key={index} className="mb-2 text-gray-700">
+                          {cleanLine}
+                        </p>
+                      );
+                    })}
+                  </div>
+              </div>
+            </div>
+            
+            {/* Custom Budget Prompt */}
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-6 rounded-xl border border-blue-200/60 relative z-10">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                  <Brain className="h-4 w-4 text-white" />
+                </div>
+                <p className="text-lg font-semibold text-blue-900">Do you want the AI to build a customized budget?</p>
+              </div>
+              <div className="flex gap-4 mb-4">
                 <button
-                  className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none"
+                  className="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 focus:outline-none focus:ring-4 focus:ring-green-200 transition-all duration-300 transform hover:-translate-y-0.5 shadow-md"
                   onClick={async () => {
                     setAiPromptResponse('yes');
                     setCustomBudget(null);
@@ -473,46 +684,87 @@ const BudgetManager = () => {
                   }}
                   type="button"
                 >
-                  Yes
+                  Yes, please!
                 </button>
                 <button
-                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none"
+                  className="px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 focus:outline-none focus:ring-4 focus:ring-red-200 transition-all duration-300 transform hover:-translate-y-0.5 shadow-md"
                   onClick={() => setAiPromptResponse('no')}
                   type="button"
                 >
-                  No
+                  No, thanks
                 </button>
               </div>
+              
+              {/* Custom Budget Results */}
               {aiPromptResponse === 'yes' && (
-                <div className="mt-3">
-                  {customBudgetLoading && <div className="text-blue-700 font-semibold">Calculating your custom 50/30/20 budget...</div>}
-                  {customBudgetError && <div className="text-red-700 font-semibold">{customBudgetError}</div>}
+                <div className="mt-4">
+                  {customBudgetLoading && (
+                    <div className="flex items-center gap-3 p-4 bg-blue-100 rounded-lg border border-blue-200">
+                      <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                      <span className="text-blue-700 font-semibold">Calculating your custom 50/30/20 budget...</span>
+                    </div>
+                  )}
+                  {customBudgetError && (
+                    <div className="p-4 bg-red-100 rounded-lg border border-red-200 text-red-700 font-semibold">
+                      {customBudgetError}
+                    </div>
+                  )}
                   {customBudget && (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-4 mt-2">
-                      <h4 className="font-bold text-green-900 mb-2">Your 50/30/20 Custom Budget</h4>
-                      <div className="text-gray-800 mb-1">Monthly Income: <span className="font-semibold">₹{customBudget.monthlyIncome.toLocaleString()}</span></div>
-                      <div className="text-gray-800 mb-1">AI-Suggested Savings: <span className="font-semibold">₹{customBudget.aiSuggestedSavings.toLocaleString()}</span></div>
-                      <div className="text-gray-800 mb-1">Remaining for 50/30/20: <span className="font-semibold">₹{customBudget.remaining.toLocaleString()}</span></div>
-                      <div className="mt-2">
-                        <div className="text-blue-900 font-medium">
-                          Needs (50%): <span className="font-semibold">₹{customBudget.breakdown.needs.toLocaleString()}</span>
-                          <div className="text-xs text-gray-700 mt-1">(Food, Transportation and Fuel, Housing, Utilities, Grocery, Healthcare, Education)</div>
+                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 border border-green-200 rounded-xl p-6 mt-4 shadow-lg">
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center">
+                          <DollarSign className="h-5 w-5 text-white" />
                         </div>
-                        <div className="text-blue-900 font-medium mt-2">
-                          Wants (30%): <span className="font-semibold">₹{customBudget.breakdown.wants.toLocaleString()}</span>
-                          <div className="text-xs text-gray-700 mt-1">(Entertainment, Shopping, Travel, Personal Care)</div>
+                        <h4 className="text-xl font-bold text-green-900">Your 50/30/20 Custom Budget</h4>
                         </div>
-                        <div className="text-blue-900 font-medium mt-2">
-                          Extra (20%): <span className="font-semibold">₹{customBudget.breakdown.extra.toLocaleString()}</span>
+                      
+                      {/* Budget Summary */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div className="bg-white p-4 rounded-lg border border-green-200/60">
+                          <div className="text-sm text-gray-600 mb-1">Monthly Income</div>
+                          <div className="text-xl font-bold text-green-700">₹{customBudget.monthlyIncome.toLocaleString()}</div>
+                        </div>
+                        <div className="bg-white p-4 rounded-lg border border-green-200/60">
+                          <div className="text-sm text-gray-600 mb-1">AI-Suggested Savings</div>
+                          <div className="text-xl font-bold text-green-700">₹{customBudget.aiSuggestedSavings.toLocaleString()}</div>
+                      </div>
+                        <div className="bg-white p-4 rounded-lg border border-green-200/60">
+                          <div className="text-sm text-gray-600 mb-1">Remaining for 50/30/20</div>
+                          <div className="text-xl font-bold text-green-700">₹{customBudget.remaining.toLocaleString()}</div>
                         </div>
                       </div>
-                      {/* Auto-fill prompt */}
+                      
+                      {/* Budget Breakdown */}
+                      <div className="space-y-4">
+                        <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-lg border border-blue-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-blue-900 font-semibold">Needs (50%)</span>
+                            <span className="text-blue-700 font-bold text-lg">₹{customBudget.breakdown.needs.toLocaleString()}</span>
+                          </div>
+                          <div className="text-xs text-blue-700">Food, Transportation and Fuel, Housing, Utilities, Grocery, Healthcare, Education</div>
+                        </div>
+                        <div className="bg-gradient-to-r from-purple-50 to-purple-100 p-4 rounded-lg border border-purple-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-purple-900 font-semibold">Wants (30%)</span>
+                            <span className="text-purple-700 font-bold text-lg">₹{customBudget.breakdown.wants.toLocaleString()}</span>
+                          </div>
+                          <div className="text-xs text-purple-700">Entertainment, Shopping, Travel, Personal Care</div>
+                        </div>
+                        <div className="bg-gradient-to-r from-indigo-50 to-indigo-100 p-4 rounded-lg border border-indigo-200">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-indigo-900 font-semibold">Extra (20%)</span>
+                            <span className="text-indigo-700 font-bold text-lg">₹{customBudget.breakdown.extra.toLocaleString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Auto-fill Prompt */}
                       {!autoFillDone && (
-                        <div className="mt-4 p-3 bg-blue-100 rounded-lg border border-blue-200">
-                          <p className="mb-2 font-medium text-blue-900">Should I add this automatically?</p>
+                        <div className="mt-6 p-4 bg-gradient-to-r from-blue-100 to-indigo-100 rounded-lg border border-blue-200">
+                          <p className="mb-3 font-semibold text-blue-900">Should I add this automatically to your budget settings?</p>
                           <div className="flex gap-4">
                             <button
-                              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none"
+                              className="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 focus:outline-none focus:ring-4 focus:ring-green-200 transition-all duration-300 transform hover:-translate-y-0.5 shadow-md"
                               onClick={() => {
                                 // Extract achievable goal from aiPrompt or aiSuggestion
                                 let goalText = aiPrompt;
@@ -536,33 +788,50 @@ const BudgetManager = () => {
                               }}
                               type="button"
                             >
-                              Yes
+                              Yes, auto-fill!
                             </button>
                             <button
-                              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none"
+                              className="px-6 py-3 bg-gradient-to-r from-red-500 to-red-600 text-white rounded-lg hover:from-red-600 hover:to-red-700 focus:outline-none focus:ring-4 focus:ring-red-200 transition-all duration-300 transform hover:-translate-y-0.5 shadow-md"
                               onClick={() => {
                                 setAutoFillDone(true);
                                 setAutoFillDeclined(true);
                               }}
                               type="button"
                             >
-                              No
+                              No, I'll do it manually
                             </button>
                           </div>
                         </div>
                       )}
+                      
+                      {/* Auto-fill Status */}
                       {autoFillDone && !autoFillDeclined && (
-                        <div className="mt-2 text-green-700 font-semibold">Fields have been auto-filled in Budget Settings below!</div>
+                        <div className="mt-4 p-3 bg-green-100 rounded-lg border border-green-200 text-green-700 font-semibold flex items-center gap-2">
+                          <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center">
+                            <CheckCircle className="h-3 w-3 text-white" />
+                          </div>
+                          Fields have been auto-filled in Budget Settings below!
+                        </div>
                       )}
                       {autoFillDone && autoFillDeclined && (
-                        <div className="mt-2 text-blue-700 font-semibold">OK, fill manually</div>
+                        <div className="mt-4 p-3 bg-blue-100 rounded-lg border border-blue-200 text-blue-700 font-semibold flex items-center gap-2">
+                          <div className="w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center">
+                            <AlertCircle className="h-3 w-3 text-white" />
+                          </div>
+                          OK, you can fill the fields manually below
+                        </div>
                       )}
                     </div>
                   )}
                 </div>
               )}
               {aiPromptResponse === 'no' && (
-                <div className="mt-3 text-red-700 font-semibold">No problem! You can always ask for help later.</div>
+                <div className="mt-4 p-3 bg-gray-100 rounded-lg border border-gray-200 text-gray-700 font-semibold flex items-center gap-2">
+                  <div className="w-5 h-5 bg-gray-500 rounded-full flex items-center justify-center">
+                    <AlertCircle className="h-3 w-3 text-white" />
+                  </div>
+                  No problem! You can always ask for help later.
+                </div>
               )}
             </div>
           </>
@@ -596,162 +865,303 @@ const BudgetManager = () => {
         </div>
       </div>
       {/* Combined Budget Settings and Categories */}
-      <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-200 w-full mb-8">
-        <div className="flex items-center space-x-3 mb-8">
-          <Target className="h-7 w-7 text-blue-600" />
-          <h3 className="text-2xl font-extrabold text-gray-900 tracking-tight">Budget Management</h3>
+      <div className="bg-gradient-to-br from-white via-gray-50/30 to-blue-50/20 p-8 rounded-2xl shadow-xl border border-gray-200/60 w-full mb-8 relative overflow-hidden">
+        {/* Background decorative elements */}
+        <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br from-blue-100/30 to-purple-100/30 rounded-full -translate-y-12 translate-x-12 blur-xl"></div>
+        <div className="absolute bottom-0 left-0 w-20 h-20 bg-gradient-to-tr from-indigo-100/30 to-blue-100/30 rounded-full translate-y-10 -translate-x-10 blur-lg"></div>
+        
+        {/* Header */}
+        <div className="flex items-center space-x-4 mb-8 relative z-10">
+          <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+            <Target className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold text-gray-800">Budget Management</h2>
+            <p className="text-base text-gray-500">Set your financial goals and track your progress</p>
+          </div>
         </div>
         
         {/* Budget Settings Section */}
-        <div className="mb-12">
-          <h4 className="text-lg font-semibold text-gray-800 mb-6 pb-2 border-b border-gray-200">Budget Settings</h4>
-          {/* Month/Year selectors */}
-          <div className="mb-6 flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 mr-2 text-gray-700">
-              <Calendar className="h-5 w-5 text-blue-600" />
-              <span className="text-sm font-medium">Budget period</span>
+        <div className="mb-8">
+          <div className="flex items-center mb-6">
+            <div className="w-1 h-6 bg-gradient-to-b from-purple-500 to-blue-500 rounded-full mr-3"></div>
+            <h3 className="text-xl font-semibold text-gray-800">Budget Settings</h3>
             </div>
+          
+          {/* Budget Period */}
+          <div className="bg-blue-50/50 border border-blue-200/50 rounded-xl p-6 mb-6">
+            <div className="flex items-center space-x-3 mb-4">
+              <Calendar className="w-5 h-5 text-blue-600" />
+              <span className="text-base font-medium text-gray-700">Budget Period</span>
+            </div>
+            <div className="flex space-x-4">
             <select
               value={selectedMonth}
-              onChange={(e) => setSelectedMonth(Number(e.target.value))}
-              className="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {monthNames.map((name, idx) => (
-                <option key={name} value={idx}>{name}</option>
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="flex-1 px-4 py-3 bg-white border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              >
+                {monthNames.map((month) => (
+                  <option key={month} value={month}>
+                    {month}
+                  </option>
               ))}
             </select>
             <select
               value={selectedYear}
-              onChange={(e) => setSelectedYear(Number(e.target.value))}
-              className="px-3 py-2 border border-gray-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {years.map((y) => (
-                <option key={y} value={y}>{y}</option>
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="flex-1 px-4 py-3 bg-white border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              >
+                {years.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
               ))}
             </select>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-            {/* Left Column */}
-            <div className="space-y-6">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Monthly Budget Goal</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">{symbol}</span>
+          </div>
+
+          {/* Monthly Budget Goal */}
+          <div className="mb-6">
+            <div className="flex items-center mb-3">
+              <div className="w-3 h-3 bg-purple-500 rounded-full mr-3"></div>
+              <label className="text-base font-medium text-gray-700">Monthly Budget Goal</label>
+            </div>
                   <input
-                    type="text"
-                    value={monthlyBudgetInput !== undefined ? monthlyBudgetInput : (monthlyBudget === 0 ? '' : monthlyBudget)}
-                    onChange={e => handleMonthlyBudgetInputChange(e.target.value)}
-                    onBlur={handleMonthlyBudgetInputBlur}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 hover:border-blue-400 transition align-middle"
-                  />
+              type="number"
+              value={monthlyBudget}
+              onChange={(e) => setMonthlyBudget(e.target.value)}
+              placeholder="Enter your monthly budget"
+              className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            />
+            <p className="text-sm text-gray-500 mt-2">Set your total spending goal for the month</p>
                 </div>
-                <p className="text-xs text-gray-500 mt-1">Set your total spending goal for the month.</p>
+
+          {/* Monthly Investment Goal */}
+          <div className="mb-6">
+            <div className="flex items-center mb-3">
+              <div className="w-3 h-3 bg-orange-500 rounded-full mr-3"></div>
+              <label className="text-base font-medium text-gray-700">Monthly Investment Goal</label>
               </div>
+            <input
+              type="number"
+              value={monthlyInvestmentGoal}
+              onChange={(e) => setMonthlyInvestmentGoal(e.target.value)}
+              placeholder="Enter your investment goal"
+              className="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            />
+            <p className="text-sm text-gray-500 mt-2">How much do you want to invest this month?</p>
+          </div>
+        </div>
+
+        {/* Category Allocations */}
+        <div className="mb-8">
+          <div className="flex items-center mb-6">
+            <div className="w-1 h-6 bg-gradient-to-b from-green-500 to-emerald-500 rounded-full mr-3"></div>
+            <h3 className="text-xl font-semibold text-gray-800">Category Allocations</h3>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {categoryBudgets.map((category, index) => (
+              <div key={category.name} className="bg-white border border-gray-200 rounded-xl p-5 shadow-sm hover:shadow-md transition-all duration-200">
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-base font-semibold text-gray-800">{category.name}</span>
+                  <div className="w-8 h-8 bg-gradient-to-br from-purple-100 to-blue-100 rounded-lg flex items-center justify-center">
+                    <span className="text-sm text-purple-600 font-medium">
+                      {index + 1}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="space-y-3">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Monthly Savings Goal</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">{symbol}</span>
+                    <label className="block text-sm font-medium text-gray-600 mb-2">Budget Amount (₹)</label>
                   <input
                     type="number"
-                    value={monthlySavingsGoal}
-                    onChange={e => setMonthlySavingsGoal(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent bg-gray-50 hover:border-green-400 transition align-middle"
-                    placeholder="Enter your savings goal"
+                      value={categoryBudgetInputs[index] !== undefined ? categoryBudgetInputs[index] : category.budget}
+                      onChange={(e) => handleCategoryBudgetInputChange(index, e.target.value)}
+                      onBlur={() => handleCategoryBudgetInputBlur(index)}
+                      placeholder="Enter amount"
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg text-base focus:ring-2 focus:ring-purple-500 focus:border-transparent focus:bg-white transition-all"
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">How much do you want to save this month?</p>
+                  
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Current Spending</span>
+                    <span className="font-medium text-gray-700">₹{category.current.toLocaleString()}</span>
+                  </div>
+                  
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div 
+                      className="bg-gradient-to-r from-purple-500 to-blue-500 h-2 rounded-full transition-all duration-300"
+                      style={{ 
+                        width: `${category.budget > 0 ? Math.min((category.current / category.budget) * 100, 100) : 0}%` 
+                      }}
+                    ></div>
+                  </div>
+                  
+                  <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span>0%</span>
+                    <span>{category.budget > 0 ? Math.round((category.current / category.budget) * 100) : 0}% used</span>
+                    <span>100%</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Monthly Savings Goal */}
+        <div className="mb-8">
+          <div className="flex items-center mb-6">
+            <div className="w-1 h-6 bg-gradient-to-b from-blue-500 to-cyan-500 rounded-full mr-3"></div>
+            <h3 className="text-xl font-semibold text-gray-800">Savings & Goals</h3>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-gradient-to-br from-blue-50 to-cyan-50 border border-blue-200 rounded-xl p-6">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-600 rounded-xl flex items-center justify-center">
+                  <Save className="w-5 h-5 text-white" />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Achievable Goal</label>
+                  <h4 className="text-lg font-semibold text-blue-900">Monthly Savings Goal</h4>
+                  <p className="text-sm text-blue-600">Set your target savings amount</p>
+                </div>
+              </div>
                 <input
-                  type="text"
-                  value={achievableGoal}
-                  onChange={e => setAchievableGoal(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-gray-50 hover:border-purple-400 transition align-middle"
-                  placeholder="Describe your goal (e.g., Save for a new car)"
-                />
-                <p className="text-xs text-gray-500 mt-1">Describe a specific goal you want to achieve this month.</p>
+                type="number"
+                value={monthlySavingsGoal}
+                onChange={(e) => setMonthlySavingsGoal(e.target.value)}
+                placeholder="Enter savings goal"
+                className="w-full px-4 py-3 bg-white border border-blue-200 rounded-lg text-base focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+              />
               </div>
+            
+            <div className="bg-gradient-to-br from-orange-50 to-red-50 border border-orange-200 rounded-xl p-6">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-red-600 rounded-xl flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-white" />
             </div>
-            {/* Right Column */}
-            <div className="space-y-6">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Monthly Investment Goal</label>
-                <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 font-medium">{symbol}</span>
+                  <h4 className="text-lg font-semibold text-orange-900">Monthly Investment Goal</h4>
+                  <p className="text-sm text-orange-600">Plan your investment strategy</p>
+                </div>
+              </div>
                   <input
                     type="number"
                     value={monthlyInvestmentGoal}
-                    onChange={e => setMonthlyInvestmentGoal(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent bg-gray-50 hover:border-yellow-400 transition align-middle"
-                    placeholder="Enter your investment goal"
+                onChange={(e) => setMonthlyInvestmentGoal(e.target.value)}
+                placeholder="Enter investment goal"
+                className="w-full px-4 py-3 bg-white border border-orange-200 rounded-lg text-base focus:ring-2 focus:ring-orange-500 focus:border-transparent transition-all"
                   />
                 </div>
-                <p className="text-xs text-gray-500 mt-1">How much do you want to invest this month?</p>
+          </div>
+          
+          <div className="mt-6 bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-6">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                <Target className="w-5 h-5 text-white" />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Months to Achieve Goal</label>
+                <h4 className="text-lg font-semibold text-purple-900">Long-term Financial Goal</h4>
+                <p className="text-sm text-purple-600">Set a bigger financial milestone</p>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-purple-700 mb-2">Goal Description</label>
+                <input
+                  type="text"
+                  value={achievableGoal}
+                  onChange={(e) => setAchievableGoal(e.target.value)}
+                  placeholder="e.g., Buy a house, Start business"
+                  className="w-full px-4 py-3 bg-white border border-purple-200 rounded-lg text-base focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-purple-700 mb-2">Timeline (months)</label>
                 <input
                   type="number"
                   value={monthsToAchieveGoal}
-                  onChange={e => setMonthsToAchieveGoal(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-gray-50 hover:border-blue-400 transition align-middle"
-                  placeholder="Enter number of months"
-                  min="1"
+                  onChange={(e) => setMonthsToAchieveGoal(e.target.value)}
+                  placeholder="e.g., 24 months"
+                  className="w-full px-4 py-3 bg-white border border-purple-200 rounded-lg text-base focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
                 />
-                <p className="text-xs text-gray-500 mt-1">How many months do you plan to achieve your goal in?</p>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Category Budgets Section */}
-        <div className="mt-12">
-          <h4 className="text-lg font-semibold text-gray-800 mb-6 pb-2 border-b border-gray-200">Category Budgets</h4>
-          <div className="space-y-4">
-            {categoryBudgets.map((category, idx) => {
-              const isOverBudget = category.current > category.budget;
-              return (
-                <div
-                  key={category.name}
-                  className={`flex items-center justify-between p-4 bg-gray-50 rounded-lg ${isOverBudget ? 'border border-red-500' : ''}`}
-                >
-                  <div className="flex-1">
-                    <p className="font-medium text-gray-900">{category.name}</p>
-                    <div className="flex items-center space-x-4 mt-2">
-                      <div className="flex-1 bg-gray-200 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full transition-all duration-300 ${isOverBudget ? 'bg-gradient-to-r from-red-500 to-red-600' : 'bg-gradient-to-r from-blue-500 to-purple-600'}`}
-                          style={{ width: `${category.budget > 0 ? Math.min((category.current / category.budget) * 100, 100) : 0}%` }}
-                        />
+        {/* Save Button */}
+        <div className="flex flex-col items-center space-y-6">
+          {/* Budget Summary Card */}
+          <div className="w-full bg-gradient-to-r from-purple-50 to-indigo-50 border border-purple-200 rounded-xl p-6">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center">
+                <BarChart3 className="w-5 h-5 text-white" />
                       </div>
-                      <span className={`text-sm ${isOverBudget ? 'text-red-600 font-semibold' : 'text-gray-600'}`}>
-                        {symbol}{category.current} / {symbol}{category.budget}
-                      </span>
+              <div>
+                <h4 className="text-lg font-semibold text-purple-900">Budget Summary</h4>
+                <p className="text-sm text-purple-600">Overview of your financial plan</p>
                     </div>
                   </div>
-                  <input
-                    type="text"
-                    value={categoryBudgetInputs[idx] !== undefined ? categoryBudgetInputs[idx] : (category.budget === 0 ? '' : category.budget)}
-                    className="w-20 px-2 py-1 border border-gray-300 rounded text-sm ml-4"
-                    onChange={e => handleCategoryBudgetInputChange(idx, e.target.value)}
-                    onBlur={() => handleCategoryBudgetInputBlur(idx)}
-                  />
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-white p-4 rounded-lg border border-purple-200/60">
+                <div className="text-sm text-gray-600 mb-1">Total Budget</div>
+                <div className="text-xl font-bold text-purple-700">₹{monthlyBudget ? monthlyBudget.toLocaleString() : '0'}</div>
                 </div>
-              );
-            })}
+              <div className="bg-white p-4 rounded-lg border border-purple-200/60">
+                <div className="text-sm text-gray-600 mb-1">Savings Goal</div>
+                <div className="text-xl font-bold text-blue-700">₹{monthlySavingsGoal ? Number(monthlySavingsGoal).toLocaleString() : '0'}</div>
+              </div>
+              <div className="bg-white p-4 rounded-lg border border-purple-200/60">
+                <div className="text-sm text-gray-600 mb-1">Investment Goal</div>
+                <div className="text-xl font-bold text-orange-700">₹{monthlyInvestmentGoal ? Number(monthlyInvestmentGoal).toLocaleString() : '0'}</div>
+              </div>
           </div>
         </div>
 
-        {/* Single Save Button */}
-        <div className="flex justify-end mt-10">
+          {/* Save Button */}
           <button
-            className="px-6 py-3 rounded-lg bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold shadow-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-400 transition-all duration-300"
             onClick={handleSave}
             disabled={isSaving}
+            className="group relative px-8 py-3 bg-gradient-to-r from-purple-600 via-purple-500 to-purple-600 text-white font-semibold text-base rounded-xl hover:from-purple-700 hover:via-purple-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-purple-200/50 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-purple-500/25 transform hover:-translate-y-0.5 hover:scale-102 disabled:transform-none overflow-hidden"
           >
-            {isSaving ? 'Saving...' : 'Save All Budget Settings'}
+            {/* Animated background gradient */}
+            <div className="absolute inset-0 bg-gradient-to-r from-purple-400 via-purple-300 to-purple-400 opacity-0 group-hover:opacity-20 transition-opacity duration-300 animate-pulse"></div>
+            
+            {/* Shimmer effect */}
+            <div className="absolute inset-0 -translate-x-full group-hover:translate-x-full transition-transform duration-700 bg-gradient-to-r from-transparent via-white/20 to-transparent"></div>
+            
+            <div className="flex items-center justify-center space-x-2 relative z-10">
+              {isSaving ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  <span className="tracking-wide text-sm">Saving...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 group-hover:scale-110 group-hover:rotate-6 transition-all duration-200" />
+                  <span className="tracking-wide">Save Settings</span>
+                </>
+              )}
+            </div>
+            
+            {/* Enhanced glow effect */}
+            <div className="absolute inset-0 bg-gradient-to-r from-purple-400 to-purple-500 rounded-xl blur-lg opacity-0 group-hover:opacity-25 transition-opacity duration-300 -z-10 scale-105"></div>
+            
+            {/* Border glow */}
+            <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-purple-400 via-purple-500 to-purple-400 p-[1px] opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              <div className="h-full w-full bg-gradient-to-r from-purple-600 via-purple-500 to-purple-600 rounded-xl"></div>
+            </div>
           </button>
+          
+          <p className="text-sm text-gray-500 text-center max-w-md">
+            Your budget settings will be saved for {monthNames[selectedMonth]} {selectedYear}. 
+            You can modify these anytime to adjust your financial goals.
+          </p>
         </div>
       </div>
       {/* Toast Notifications */}

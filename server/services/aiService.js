@@ -295,9 +295,38 @@ Examples:
   }
 
   async generateBudgetSuggestion(prompt, budgetData, financialOverview) {
+    // Enhanced validation function to check if prompt is meaningful
+    const isValidFinancialGoal = (prompt) => {
+      if (!prompt || prompt.length < 10) return false;
+      
+      // Check for financial keywords
+      const financialKeywords = [
+        'buy', 'save', 'invest', 'budget', 'goal', 'money', 'expense', 'income',
+        'debt', 'loan', 'house', 'car', 'education', 'travel', 'wedding', 'business',
+        'retirement', 'emergency', 'fund', 'purchase', 'afford', 'cost', 'price',
+        'lakh', 'crore', 'thousand', 'million', 'billion', 'rs', 'rupees', 'dollars'
+      ];
+      
+      const promptLower = prompt.toLowerCase();
+      const hasFinancialKeyword = financialKeywords.some(keyword => promptLower.includes(keyword));
+      
+      // Check for amount patterns
+      const hasAmount = /\d+/.test(prompt);
+      
+      // Check for time references
+      const hasTimeReference = /(?:in|for|within|by|months?|years?|yrs?|mos?)/i.test(prompt);
+      
+      return hasFinancialKeyword && hasAmount && hasTimeReference;
+    };
+
     // Helper function to extract amount and time period from prompt
     const extractGoalDetails = (prompt) => {
-      if (!prompt) return { amount: 0, months: 24 };
+      if (!prompt) return { amount: 0, months: 24, isValid: false };
+      
+      // First validate if this is a meaningful financial goal
+      if (!isValidFinancialGoal(prompt)) {
+        return { amount: 0, months: 24, isValid: false, reason: 'Not a meaningful financial goal' };
+      }
       
       // Match patterns like "5 cr", "300k", "5000" etc.
       const amountMatch = prompt.match(/(\d+(?:\.\d+)?)(?:\s*(?:lakhs?|cr(?:ores?)?|k|thousand|million|mn|m|billion|bn|b)|\s*[a-z]*)/i);
@@ -326,7 +355,8 @@ Examples:
       return { 
         amount: Math.round(amount), 
         months: timeValue,
-        originalPrompt: prompt
+        originalPrompt: prompt,
+        isValid: true
       };
     };
 
@@ -345,45 +375,81 @@ Examples:
       
       let feasibilityAnalysis = '';
       if (income <= 0) {
-        feasibilityAnalysis = "We couldn't determine your income. Please ensure your financial details are up to date.";
+        feasibilityAnalysis = "**Status:** ⚠️ Income data unavailable. Please update your financial profile for personalized advice.";
       } else if (monthlySavingsNeeded === 0) {
-        feasibilityAnalysis = "Please specify both a target amount and time frame for more specific advice.";
+        feasibilityAnalysis = "**Status:** ℹ️ Please specify both target amount and time frame for specific recommendations.";
       } else {
         feasibilityAnalysis = isFeasible
-          ? `Your goal is achievable by saving ${formatCurrency(monthlySavingsNeeded)}/month.`
-          : `Your goal requires saving ${formatCurrency(monthlySavingsNeeded)}/month, but you only have ${formatCurrency(disposableIncome)} available after expenses. You would need to either increase your income by ${formatCurrency(shortfall)}/month or adjust your goal.`;
+          ? `**Status:** ✅ **ACHIEVABLE!** Your goal requires saving ${formatCurrency(monthlySavingsNeeded)}/month, which is within your current disposable income of ${formatCurrency(disposableIncome)}/month.`
+          : `**Status:** ⚠️ **CHALLENGING** - Your goal requires saving ${formatCurrency(monthlySavingsNeeded)}/month, but you only have ${formatCurrency(disposableIncome)} available after expenses. **Income gap:** ${formatCurrency(shortfall)}/month.`;
       }
 
-      return `## Financial Analysis: ${prompt}
+      return `# Financial Goal Analysis: ${prompt}
 
-### 1. Goal Feasibility
+## 📊 Goal Feasibility Assessment
 ${feasibilityAnalysis}
 
-### 2. Current Financial Snapshot
-- **Monthly Income:** ${formatCurrency(income)}
-- **Monthly Expenses:** ${formatCurrency(expenses)}
-- **Disposable Income:** ${formatCurrency(Math.max(0, disposableIncome))}/month
-- **Current Savings:** ${formatCurrency(savings)}
-- **Required Monthly Savings:** ${formatCurrency(monthlySavingsNeeded)}
+## 💰 Current Financial Snapshot
+| Metric | Amount | Status |
+|--------|--------|--------|
+| **Monthly Income** | ${formatCurrency(income)} | ${income > 0 ? '✅' : '⚠️'} |
+| **Monthly Expenses** | ${formatCurrency(expenses)} | ${expenses > 0 ? '✅' : '⚠️'} |
+| **Disposable Income** | ${formatCurrency(Math.max(0, disposableIncome))}/month | ${disposableIncome > 0 ? '✅' : '⚠️'} |
+| **Current Savings** | ${formatCurrency(savings)} | ${savings > 0 ? '✅' : '⚠️'} |
+| **Required Monthly Savings** | ${formatCurrency(monthlySavingsNeeded)} | ${monthlySavingsNeeded > 0 ? '🎯' : 'ℹ️'} |
 
-### 3. Recommended Actions
-1. **Track Expenses**: Closely monitor all spending for the next month
-2. **Emergency Fund**: Aim for 3-6 months of expenses (${formatCurrency(expenses * 3)} - ${formatCurrency(expenses * 6)})
-3. **Debt Management**: Focus on paying down high-interest debts first
-4. **Savings Automation**: Set up automatic transfers to a separate savings account
+## 🎯 Strategic Recommendations
 
-### 4. Next Steps
-For a more detailed, personalized plan, please try the AI advisor again when available. In the meantime, consider:
-- Reviewing recurring subscriptions and memberships
-- Comparing utility providers for better rates
-- Exploring ways to increase your income through side gigs or upskilling
+### Immediate Actions (This Month)
+1. **📱 Expense Tracking**: Use a budgeting app to monitor all spending
+2. **🏦 Emergency Fund**: Target 3-6 months of expenses (${formatCurrency(expenses * 3)} - ${formatCurrency(expenses * 6)})
+3. **💳 Debt Review**: List all debts by interest rate, prioritize high-interest ones
+4. **💰 Savings Automation**: Set up auto-transfer of ${formatCurrency(Math.min(monthlySavingsNeeded, disposableIncome))}/month
 
-*Note: This is a general analysis. For specific investment advice, please consult with a certified financial planner.*`;
+### Medium-term Actions (3-6 months)
+- **📊 Budget Optimization**: Identify 2-3 expense categories to reduce by 15-20%
+- **💼 Income Enhancement**: Explore side gigs, freelance, or skill development
+- **🏠 Expense Reduction**: Review subscriptions, utilities, and recurring costs
+
+## 📈 Progress Tracking
+- **Monthly Check-ins**: Review progress every 30 days
+- **Milestone Celebrations**: Acknowledge achievements at 25%, 50%, 75%
+- **Adjustment Points**: Reassess timeline if income/expenses change significantly
+
+## ⚠️ Risk Considerations
+- **Income Volatility**: Have backup plans for income fluctuations
+- **Emergency Expenses**: Maintain separate emergency fund
+- **Market Conditions**: Consider inflation impact on goal amount
+
+---
+*This analysis is based on current financial data. For investment advice, consult a certified financial planner. Update your financial profile regularly for more accurate recommendations.*`;
     };
 
     try {
       console.log('Generating budget suggestion...');
-      const { amount: goalAmount, months: goalMonths } = extractGoalDetails(prompt);
+      const goalDetails = extractGoalDetails(prompt);
+      
+      // Check if the prompt is a valid financial goal
+      if (!goalDetails.isValid) {
+        return `I couldn't understand your financial goal. Please provide a more specific goal like:
+
+**Examples of good financial goals:**
+- "I want to save ₹5 lakhs for a house down payment in 2 years"
+- "I need to buy a car worth ₹8 lakhs in 18 months"
+- "I want to save ₹2 crores for retirement in 20 years"
+- "I need ₹50,000 for emergency fund in 6 months"
+
+**Your input was:** "${prompt}"
+
+**What to include:**
+✅ Specific amount (e.g., ₹5 lakhs, $10,000)
+✅ Time frame (e.g., in 2 years, within 6 months)
+✅ Financial context (e.g., save for, buy, invest in)
+
+Please try again with a clearer financial goal!`;
+      }
+      
+      const { amount: goalAmount, months: goalMonths } = goalDetails;
       const monthlyIncome = financialOverview?.total_monthly_income || 0;
       const currentSavings = financialOverview?.total_savings || 0;
       const monthlyExpenses = financialOverview?.total_expenses || 0;
@@ -397,43 +463,60 @@ For a more detailed, personalized plan, please try the AI advisor again when ava
         ? (monthlySavingsNeeded / monthlyIncome) * 100 
         : 0;
 
-      // Create a more intelligent prompt
-      const systemPrompt = `You are a financial advisor analyzing a user's budget. Consider their current financial situation:
+      // Create a more intelligent and professional prompt
+      const systemPrompt = `You are a certified financial advisor with expertise in personal finance and budgeting. You are analyzing a user's financial situation to help them achieve a specific goal.
 
-Current Financial Status:
+**IMPORTANT RULES:**
+1. Always provide professional, actionable financial advice
+2. Use clear, structured formatting with proper headers
+3. Include specific numbers and percentages
+4. Be encouraging but realistic about goals
+5. Focus on practical steps the user can take immediately
+6. Use professional financial terminology
+7. Format currency as ₹X,XXX (Indian Rupees)
+
+**Current Financial Status:**
 - Monthly Income: ${formatCurrency(monthlyIncome)}
 - Current Savings: ${formatCurrency(currentSavings)}
 - Monthly Expenses: ${formatCurrency(monthlyExpenses)}
 - Current Savings Rate: ${currentSavingsRate.toFixed(1)}% of income
+- Disposable Income: ${formatCurrency(Math.max(0, monthlyIncome - monthlyExpenses))}/month
 
-User's Goal: ${prompt}
+**User's Financial Goal:**
+- Goal Description: "${prompt}"
 - Target Amount: ${formatCurrency(goalAmount)}
 - Time Frame: ${goalMonths} months
-- Required Monthly Savings: ${formatCurrency(monthlySavingsNeeded)} (${requiredSavingsRate.toFixed(1)}% of income)
+- Required Monthly Savings: ${formatCurrency(monthlySavingsNeeded)}
+- Required Savings Rate: ${requiredSavingsRate.toFixed(1)}% of monthly income
 
-Please provide a detailed analysis with the following sections:
+**Provide a comprehensive financial analysis with these sections:**
 
-1. **Goal Feasibility Assessment**
-   - Is this goal realistic given the user's current financial situation?
-   - What percentage of their income would need to be saved?
-   - How does this compare to their current savings rate?
+## 1. Goal Feasibility Assessment
+- **Realistic Assessment:** Is this goal achievable given current finances?
+- **Savings Analysis:** Required vs. current savings rate comparison
+- **Risk Factors:** What could prevent goal achievement?
 
-2. **Category-Specific Recommendations**
-   - Analyze their current spending in key categories
-   - Suggest specific, realistic reductions in 2-3 categories
-   - Recommend target percentages for each major expense category
+## 2. Financial Health Analysis
+- **Current Standing:** Assessment of income, expenses, and savings
+- **Gap Analysis:** What needs to change to reach the goal?
+- **Emergency Fund Status:** Current vs. recommended emergency fund
 
-3. **Action Plan**
-   - Monthly savings target breakdown
-   - Suggested timeline adjustments if needed
-   - Recommended emergency fund level
+## 3. Strategic Recommendations
+- **Expense Optimization:** Specific categories to reduce (with amounts)
+- **Income Enhancement:** Realistic ways to increase monthly income
+- **Savings Strategy:** Optimal savings allocation and automation
 
-4. **Additional Tips**
-   - Ways to increase income
-   - Tax optimization strategies
-   - Investment options for the savings
+## 4. Action Plan
+- **Monthly Targets:** Specific savings and spending targets
+- **Timeline Adjustments:** If needed, realistic timeline modifications
+- **Milestone Tracking:** Key checkpoints to measure progress
 
-Format the response in clear markdown with appropriate headers and bullet points.`;
+## 5. Risk Mitigation
+- **Contingency Plans:** What if income decreases or expenses increase?
+- **Insurance Considerations:** Protection for financial goals
+- **Investment Strategy:** Safe investment options for savings
+
+Format your response professionally with clear headers, bullet points, and actionable advice. Be specific with numbers and percentages.`;
 
       try {
         // Try to get AI response
@@ -470,8 +553,31 @@ Format the response in clear markdown with appropriate headers and bullet points
         stack: error.stack
       });
       
-      // Return a basic error message if something goes wrong
-      return "I'm having trouble analyzing your financial situation right now. Please try again later or check your financial data.";
+      // Return a helpful error message with guidance
+      return `# Financial Analysis Service Temporarily Unavailable
+
+## ⚠️ What Happened
+We're experiencing technical difficulties with our AI financial analysis service.
+
+## 🔧 What You Can Do
+1. **Try Again**: Wait a few minutes and try your request again
+2. **Check Your Data**: Ensure your financial profile is complete and up-to-date
+3. **Use Manual Planning**: Use the budget settings below to plan manually
+4. **Contact Support**: If the issue persists, please report it
+
+## 📝 Your Goal
+**Goal:** "${prompt}"
+**Status:** Pending analysis
+
+## 💡 Alternative Planning
+While we resolve this issue, you can:
+- Set your monthly budget manually in the settings below
+- Use the 50/30/20 rule (50% needs, 30% wants, 20% savings)
+- Aim for saving 20-30% of your monthly income
+- Build an emergency fund of 3-6 months of expenses
+
+---
+*We apologize for the inconvenience. Our team is working to restore full service.*`;
     }
   }
 }
