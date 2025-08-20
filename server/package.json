@@ -16,12 +16,17 @@
   "type": "commonjs",
   "dependencies": {
     "@google/generative-ai": "^0.24.1",
+    "@sendgrid/mail": "^8.1.5",
     "@supabase/supabase-js": "^2.55.0",
     "axios": "^1.10.0",
+    "chart.js": "^4.5.0",
+    "chartjs-node-canvas": "^5.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.0",
     "express": "^5.1.0",
     "lodash": "^4.17.21",
+    "moment": "^2.30.1",
+    "node-cron": "^4.2.1",
     "node-fetch": "^2.7.0"
   }
 }
