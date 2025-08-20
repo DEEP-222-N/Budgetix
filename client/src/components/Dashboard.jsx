@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from 'recharts';
-import { DollarSign, TrendingUp, Target, AlertCircle, Brain, Sparkles, Loader2, Save, X, Calendar, Percent, BarChart3, ChevronDown, PieChart as PieChartIcon } from 'lucide-react';
+import { Wallet, TrendingUp, Target, AlertCircle, Brain, Sparkles, Loader2, Save, X, Calendar, Percent, BarChart3, ChevronDown, PieChart as PieChartIcon, FileText } from 'lucide-react';
 import ExpenseCard from './ExpenseCard';
 import BudgetProgress from './BudgetProgress';
 import { useAuth } from '../context/AuthContext';
@@ -27,6 +27,46 @@ const allCategories = [
 const Dashboard = () => {
   const { user } = useAuth();
   const { monthlyBudget, setMonthlyBudget, loading: budgetLoading } = useBudget();
+const [extraIncomes, setExtraIncomes] = useState({});
+const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
+const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+// Helper to get key for month/year
+const getMonthKey = (month, year) => `${year}-${String(month + 1).padStart(2, '0')}`;
+// Get extra incomes for selected month
+const getCurrentMonthExtraIncomes = () => {
+  const key = getMonthKey(selectedMonth, selectedYear);
+  return extraIncomes[key] || [];
+};
+// Fetch extra incomes from Supabase
+useEffect(() => {
+  if (!user) return;
+  const fetchExtraIncomes = async () => {
+    const { data, error } = await supabase
+      .from('budgets')
+      .select('budget_month, budget_year, extra_income_amount, extra_income_source')
+      .eq('user_id', user.id);
+    if (!error && data) {
+      const incomes = {};
+      data.forEach(row => {
+        const key = getMonthKey(
+          [
+            'January','February','March','April','May','June','July','August','September','October','November','December'
+          ].indexOf(row.budget_month),
+          row.budget_year
+        );
+        if (row.extra_income_amount && Number(row.extra_income_amount) > 0) {
+          incomes[key] = [{
+            label: row.extra_income_source || 'Extra',
+            amount: Number(row.extra_income_amount)
+          }];
+        }
+      });
+      setExtraIncomes(incomes);
+    }
+  };
+  fetchExtraIncomes();
+}, [user]);
   const [aiRecommendations] = useState([
     "Consider reducing dining out expenses by 20% to save $90/month",
     "Switch to a more fuel-efficient commute to save $40/month",
@@ -191,11 +231,24 @@ const Dashboard = () => {
     const year = selectedYearChart === 'All' ? new Date().getFullYear() : parseInt(selectedYearChart);
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     
+    // Initialize data with base budgets
     const data = Array.from({ length: 12 }, (_, i) => ({
       month: monthNames[i],
       spent: 0,
       budget: budgetsByMonth[i] ?? 0
     }));
+    
+    // Add extra income to the budget for each month
+    Object.entries(extraIncomes).forEach(([key, incomes]) => {
+      const [yearStr, monthStr] = key.split('-');
+      const monthIndex = parseInt(monthStr) - 1; // Convert to 0-based index
+      const monthYear = parseInt(yearStr);
+      
+      if (selectedYearChart === 'All' || monthYear === parseInt(selectedYearChart)) {
+        const extra = incomes.reduce((sum, inc) => sum + (Number(inc.amount) || 0), 0);
+        data[monthIndex].budget = (data[monthIndex].budget || 0) + extra;
+      }
+    });
     
     // Filter expenses by year only
     expenses.forEach(exp => {
@@ -215,8 +268,12 @@ const Dashboard = () => {
   const totalSpent = React.useMemo(() => {
     return filteredExpensesForGraphs.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
   }, [filteredExpensesForGraphs]);
-  const remaining = monthlyBudget ? monthlyBudget - totalSpent : 0;
-  const budgetUsage = monthlyBudget && monthlyBudget > 0 ? (totalSpent / monthlyBudget) * 100 : 0;
+  
+  // Get extra income for current month and calculate total budget
+  const extra = getCurrentMonthExtraIncomes().reduce((sum, inc) => sum + (Number(inc.amount) || 0), 0);
+  const totalBudget = (Number(monthlyBudget) || 0) + extra;
+  const remaining = totalBudget - totalSpent;
+  const budgetUsage = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
 
   const COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#6B7280'];
 
@@ -271,6 +328,8 @@ const Dashboard = () => {
         <p className="text-gray-600">Track your expenses and optimize your budget with AI insights</p>
       </div>
 
+      
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {/* Total Spent Card */}
@@ -282,7 +341,7 @@ const Dashboard = () => {
               <p className="text-xs text-blue-600 font-medium mt-1">This Month</p>
             </div>
             <div className="bg-blue-100 p-3 rounded-full">
-              <DollarSign className="h-6 w-6 text-blue-600" />
+              <Wallet className="h-6 w-6 text-blue-600" />
             </div>
           </div>
         </div>
@@ -310,9 +369,16 @@ const Dashboard = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 mb-1">Monthly Budget</p>
-              <p className="text-2xl font-bold text-gray-900">
-                {monthlyBudget !== null ? `${symbol}${monthlyBudget.toLocaleString()}` : "--"}
-              </p>
+              {(() => {
+  const extra = getCurrentMonthExtraIncomes().reduce((sum, inc) => sum + (Number(inc.amount) || 0), 0);
+  const total = (Number(monthlyBudget) || 0) + extra;
+  return (
+    <div>
+      <span className="text-2xl font-bold text-gray-900">{symbol}{total.toLocaleString()}</span>
+      <div className="text-xs text-gray-500 mt-1">(Base: {symbol}{(Number(monthlyBudget)||0).toLocaleString()} + Extra: {symbol}{extra.toLocaleString()})</div>
+    </div>
+  );
+})()}
               <p className="text-xs text-purple-600 font-medium mt-1">Target</p>
             </div>
             <div className="bg-purple-100 p-3 rounded-full">
@@ -339,7 +405,7 @@ const Dashboard = () => {
       </div>
 
       {/* Budget Progress */}
-      <BudgetProgress spent={totalSpent} budget={monthlyBudget || 0} />
+      <BudgetProgress spent={totalSpent} budget={totalBudget} />
 
       {/* Enhanced Charts Section with Beautiful UI */}
       <div className="bg-gradient-to-br from-white via-gray-50 to-white p-8 rounded-2xl shadow-xl border border-gray-200 mb-8 relative overflow-hidden">
@@ -542,7 +608,7 @@ const Dashboard = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
               <div className="bg-white/20 p-3 rounded-xl backdrop-blur-sm">
-                <DollarSign className="h-6 w-6 text-white" />
+                <Wallet className="h-6 w-6 text-white" />
               </div>
               <div>
                 <h3 className="text-xl font-bold text-white">Recent Expenses</h3>
@@ -568,7 +634,7 @@ const Dashboard = () => {
             <div className="text-center py-12">
               <div className="bg-gray-50 border border-gray-200 rounded-xl p-8 max-w-md mx-auto">
                 <div className="bg-gray-100 p-4 rounded-full w-20 h-20 mx-auto mb-4 flex items-center justify-center">
-                  <DollarSign className="h-8 w-8 text-gray-400" />
+                  <Wallet className="h-8 w-8 text-gray-400" />
                 </div>
                 <h4 className="text-lg font-semibold text-gray-700 mb-2">No expenses yet</h4>
                 <p className="text-gray-500 text-sm mb-4">Start tracking your expenses to see them here</p>

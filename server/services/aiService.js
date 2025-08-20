@@ -400,29 +400,17 @@ ${feasibilityAnalysis}
 
 ## 🎯 Strategic Recommendations
 
-### Immediate Actions (This Month)
-1. **📱 Expense Tracking**: Use a budgeting app to monitor all spending
-2. **🏦 Emergency Fund**: Target 3-6 months of expenses (${formatCurrency(expenses * 3)} - ${formatCurrency(expenses * 6)})
-3. **💳 Debt Review**: List all debts by interest rate, prioritize high-interest ones
-4. **💰 Savings Automation**: Set up auto-transfer of ${formatCurrency(Math.min(monthlySavingsNeeded, disposableIncome))}/month
+💰 **Savings Automation**: Set up auto-transfer of ${formatCurrency(Math.min(monthlySavingsNeeded, disposableIncome))}/month to your other savings account
 
-### Medium-term Actions (3-6 months)
-- **📊 Budget Optimization**: Identify 2-3 expense categories to reduce by 15-20%
-- **💼 Income Enhancement**: Explore side gigs, freelance, or skill development
-- **🏠 Expense Reduction**: Review subscriptions, utilities, and recurring costs
-
-## 📈 Progress Tracking
 - **Monthly Check-ins**: Review progress every 30 days
 - **Milestone Celebrations**: Acknowledge achievements at 25%, 50%, 75%
-- **Adjustment Points**: Reassess timeline if income/expenses change significantly
 
-## ⚠️ Risk Considerations
 - **Income Volatility**: Have backup plans for income fluctuations
 - **Emergency Expenses**: Maintain separate emergency fund
 - **Market Conditions**: Consider inflation impact on goal amount
 
 ---
-*This analysis is based on current financial data. For investment advice, consult a certified financial planner. Update your financial profile regularly for more accurate recommendations.*`;
+*This analysis is based on your current financial data from the app. For investment advice, consult a certified financial planner. Update your financial profile regularly for more accurate recommendations.*`;
     };
 
     try {
@@ -502,19 +490,9 @@ Please try again with a clearer financial goal!`;
 - **Emergency Fund Status:** Current vs. recommended emergency fund
 
 ## 3. Strategic Recommendations
-- **Expense Optimization:** Specific categories to reduce (with amounts)
-- **Income Enhancement:** Realistic ways to increase monthly income
-- **Savings Strategy:** Optimal savings allocation and automation
-
-## 4. Action Plan
-- **Monthly Targets:** Specific savings and spending targets
-- **Timeline Adjustments:** If needed, realistic timeline modifications
-- **Milestone Tracking:** Key checkpoints to measure progress
-
-## 5. Risk Mitigation
-- **Contingency Plans:** What if income decreases or expenses increase?
-- **Insurance Considerations:** Protection for financial goals
-- **Investment Strategy:** Safe investment options for savings
+- **Savings Automation:** Set up auto-transfer of the required monthly savings amount
+- **Progress Tracking:** Monthly check-ins and milestone celebrations
+- **Risk Mitigation:** Income volatility, emergency expenses, and market conditions
 
 Format your response professionally with clear headers, bullet points, and actionable advice. Be specific with numbers and percentages.`;
 
@@ -571,14 +549,115 @@ We're experiencing technical difficulties with our AI financial analysis service
 
 ## 💡 Alternative Planning
 While we resolve this issue, you can:
-- Set your monthly budget manually in the settings below
-- Use the 50/30/20 rule (50% needs, 30% wants, 20% savings)
+- Set your monthly budget manually in the settings below using your current spending data
+- Use the 50/30/20 rule (50% needs, 30% wants, 20% savings) based on your income
 - Aim for saving 20-30% of your monthly income
-- Build an emergency fund of 3-6 months of expenses
+- Build an emergency fund of 3-6 months of expenses using your expense history
 
 ---
 *We apologize for the inconvenience. Our team is working to restore full service.*`;
     }
+  }
+
+  async generateMonthlyInsights(reportData) {
+    try {
+      const systemPrompt = `You are a certified financial advisor analyzing monthly spending data. Provide 3 concise, actionable insights based on the user's financial data.
+
+**IMPORTANT RULES:**
+1. Keep insights concise and actionable (1-2 sentences each)
+2. Focus on spending patterns and practical advice
+3. Be encouraging but realistic
+4. Reference specific data from their report
+5. NEVER suggest using a budgeting app - the user is already using one
+6. NEVER give generic advice like "track your expenses" - be specific and actionable
+7. ALWAYS reference the user's existing financial data and app usage
+
+**Monthly Financial Data:**
+- Total Expenses: ₹${reportData.totalExpenses?.toLocaleString() || 'N/A'}
+- Total Budget: ₹${reportData.totalBudget?.toLocaleString() || 'N/A'}
+- Budget Usage: ${reportData.budgetUsage?.toFixed(1) || 'N/A'}%
+- Top Expense Category: ${Object.entries(reportData.categoryBreakdown || {}).sort((a, b) => b[1] - a[1])[0]?.[0] || 'N/A'}
+- Total Transactions: ${reportData.totalTransactions || 0}
+- Average Transaction: ₹${reportData.averageTransaction?.toFixed(0) || 'N/A'}
+
+**Category Breakdown:**
+${Object.entries(reportData.categoryBreakdown || {}).map(([category, amount]) => `- ${category}: ₹${amount.toLocaleString()}`).join('\n')}
+
+**Top Expenses:**
+${(reportData.topExpenses || []).map((exp, i) => `${i + 1}. ${exp.description} (${exp.category}): ₹${Number(exp.amount).toLocaleString()}`).join('\n')}
+
+Generate exactly 3 insights that are:
+1. **Spending Pattern Analysis**: Identify notable spending trends
+2. **Budget Optimization**: Suggest specific improvements based on their data
+3. **Actionable Next Steps**: Provide concrete actions they can take
+
+Format each insight as a clear, actionable statement. Be specific with numbers and categories from their data.`;
+
+      try {
+        // Try to get AI response
+        const result = await this.withRetry(async () => {
+          const result = await this.model.generateContent({
+            contents: [{ role: 'user', parts: [{ text: systemPrompt }] }],
+          });
+          return result.response;
+        }, 3, 2000);
+
+        const text = await result.text();
+        console.log('Successfully generated monthly insights');
+        
+        // Parse the response to extract insights
+        const lines = text.split('\n').filter(line => line.trim());
+        const insights = lines.slice(0, 3).map(line => line.replace(/^\d+\.\s*/, '').trim());
+        
+        return insights;
+        
+      } catch (error) {
+        console.error('AI API Error for monthly insights:', {
+          message: error.message,
+          status: error.status,
+          code: error.code
+        });
+        
+        // Fallback insights based on the data
+        return this.generateFallbackMonthlyInsights(reportData);
+      }
+    } catch (error) {
+      console.error('Error in generateMonthlyInsights:', error);
+      return this.generateFallbackMonthlyInsights(reportData);
+    }
+  }
+
+  generateFallbackMonthlyInsights(reportData) {
+    const insights = [];
+    
+    // Insight 1: Budget usage analysis
+    if (reportData.budgetUsage > 100) {
+      insights.push(`You're ${(reportData.budgetUsage - 100).toFixed(1)}% over budget this month. Consider reviewing your top expense categories for potential reductions.`);
+    } else if (reportData.budgetUsage > 80) {
+      insights.push(`You're using ${reportData.budgetUsage.toFixed(1)}% of your budget. Great discipline! You have ${(100 - reportData.budgetUsage).toFixed(1)}% remaining for unexpected expenses.`);
+    } else {
+      insights.push(`You're only using ${reportData.budgetUsage.toFixed(1)}% of your budget. Consider allocating more to savings or investment goals.`);
+    }
+    
+    // Insight 2: Top category analysis
+    const topCategory = Object.entries(reportData.categoryBreakdown || {}).sort((a, b) => b[1] - a[1])[0];
+    if (topCategory) {
+      const [category, amount] = topCategory;
+      const percentage = ((amount / reportData.totalExpenses) * 100).toFixed(1);
+      insights.push(`Your highest expense category is ${category} at ${percentage}% of total spending (₹${amount.toLocaleString()}). Review if this aligns with your priorities.`);
+    }
+    
+    // Insight 3: Transaction pattern analysis
+    if (reportData.totalTransactions > 0) {
+      const avgAmount = reportData.averageTransaction;
+      if (avgAmount > (reportData.totalBudget * 0.1)) {
+        insights.push(`Your average transaction amount is ₹${avgAmount.toFixed(0)}, which is quite high. Consider breaking down large purchases or reviewing if smaller expenses are adding up.`);
+      } else {
+        insights.push(`Your average transaction amount is ₹${avgAmount.toFixed(0)}. This suggests good control over individual purchases. Focus on reducing the number of transactions if needed.`);
+      }
+    }
+    
+    return insights;
   }
 }
 

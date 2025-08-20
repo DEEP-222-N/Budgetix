@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { useCurrency } from '../context/CurrencyContext';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Search, X, TrendingUp, Filter, Edit3, Trash2, ArrowLeft, Save, XCircle, ChevronUp, ChevronDown, DollarSign, Receipt } from 'lucide-react';
+import { Calendar, Search, X, TrendingUp, Filter, Edit3, Trash2, ArrowLeft, Save, XCircle, ChevronUp, ChevronDown, Wallet, Receipt } from 'lucide-react';
 
 const AllExpenses = () => {
   const { user } = useAuth();
@@ -258,7 +258,7 @@ const AllExpenses = () => {
                   <p className="text-xs text-green-600 font-medium">Per Record</p>
                 </div>
                 <div className="p-3 bg-gradient-to-br from-green-50 to-green-100 rounded-xl">
-                  <DollarSign className="h-6 w-6 text-green-600" />
+                  <Wallet className="h-6 w-6 text-green-600" />
                 </div>
               </div>
             </div>
