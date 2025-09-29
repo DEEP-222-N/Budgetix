@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react';
 import './AddExpense.css';
 import { useAuth } from '../context/AuthContext';
-import { CheckCircle, AlertCircle, X, Scan } from 'lucide-react';
+import { CheckCircle, AlertCircle, X, Scan, Loader2 } from 'lucide-react';
+import { processReceipt } from '../utils/ocrUtils';
 
 
 const AddExpense = () => {
@@ -147,36 +148,47 @@ const AddExpense = () => {
     try {
       setScanError('');
       setIsScanningReceipt(true);
-      const base64Data = await fileToBase64(file);
-      const response = await fetch('http://localhost:5000/api/ai/scan-receipt', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ base64Data, mimeType: file.type })
-      });
-      const data = await response.json();
-      if (!response.ok || !data.success) {
-        throw new Error(data.error || 'Failed to scan receipt');
+      
+      // Process the receipt using Tesseract.js
+      const result = await processReceipt(file);
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to process receipt');
       }
-      const r = data.data || {};
-      const mappedCategory = mapAiCategoryToAppCategory(r.category);
-      setFormData((prev) => ({
+      
+      const { amount, date, merchantName, description } = result.data;
+      
+      // Map merchant name to category
+      const category = mapAiCategoryToAppCategory(merchantName);
+      
+      // Update form with extracted data
+      setFormData(prev => ({
         ...prev,
-        amount: r.amount != null && !Number.isNaN(Number(r.amount)) ? String(r.amount) : prev.amount,
-        date: r.date ? new Date(r.date).toISOString().split('T')[0] : prev.date,
-        category: mappedCategory || prev.category,
-        description: (r.merchantName ? `${r.merchantName} - ` : '') + (r.description || prev.description || '')
+        amount: amount ? String(amount) : prev.amount,
+        date: date || prev.date,
+        description: description || prev.description,
+        category: category || prev.category
       }));
-    } catch (err) {
-      console.error('Receipt scan failed:', err);
-      setScanError(err.message || 'Failed to scan receipt');
+      
+      setShowSuccess(true);
+    } catch (error) {
+      console.error('Error processing receipt:', error);
+      let errorMessage = 'Failed to scan receipt. ';
+      if (error.message.includes('Tesseract')) {
+        errorMessage += 'Please ensure the image is clear and well-lit.';
+      } else {
+        errorMessage += 'Please try again with a clearer image.';
+      }
+      setScanError(errorMessage);
     } finally {
       setIsScanningReceipt(false);
     }
   };
 
   const onScanInputChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      handleScanReceiptFile(e.target.files[0]);
+    const file = e.target.files?.[0];
+    if (file) {
+      handleScanReceiptFile(file);
       // Reset the input so the same file can be selected again if needed
       e.target.value = '';
     }
