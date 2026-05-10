@@ -132,8 +132,7 @@ useEffect(() => {
         .from('expenses')
         .select('*')
         .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(10);
+        .order('date', { ascending: false });
       if (error) {
         console.error('Supabase error:', error);
         setExpensesError('Failed to load expenses.');
@@ -264,7 +263,20 @@ useEffect(() => {
     return data;
   }, [expenses, selectedYearChart, budgetsByMonth]);
 
-  // Calculate spent for selected period
+  // Calculate spent for CURRENT MONTH ONLY (for the summary cards)
+  const currentMonthSpent = React.useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    return expenses
+      .filter(exp => {
+        const d = new Date(exp.date);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      })
+      .reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
+  }, [expenses]);
+
+  // Calculate spent for selected period (used in charts)
   const totalSpent = React.useMemo(() => {
     return filteredExpensesForGraphs.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
   }, [filteredExpensesForGraphs]);
@@ -272,8 +284,9 @@ useEffect(() => {
   // Get extra income for current month and calculate total budget
   const extra = getCurrentMonthExtraIncomes().reduce((sum, inc) => sum + (Number(inc.amount) || 0), 0);
   const totalBudget = (Number(monthlyBudget) || 0) + extra;
-  const remaining = totalBudget - totalSpent;
-  const budgetUsage = totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0;
+  // Summary cards use current month spent only
+  const remaining = totalBudget - currentMonthSpent;
+  const budgetUsage = totalBudget > 0 ? (currentMonthSpent / totalBudget) * 100 : 0;
 
   const COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#6B7280'];
 
@@ -337,7 +350,7 @@ useEffect(() => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 mb-1">Total Spent</p>
-              <p className="text-2xl font-bold text-gray-900">{symbol}{totalSpent.toLocaleString()}</p>
+              <p className="text-2xl font-bold text-gray-900">{symbol}{currentMonthSpent.toLocaleString()}</p>
               <p className="text-xs text-blue-600 font-medium mt-1">This Month</p>
             </div>
             <div className="bg-blue-100 p-3 rounded-full">
@@ -405,7 +418,7 @@ useEffect(() => {
       </div>
 
       {/* Budget Progress */}
-      <BudgetProgress spent={totalSpent} budget={totalBudget} />
+      <BudgetProgress spent={currentMonthSpent} budget={totalBudget} />
 
       {/* Enhanced Charts Section with Beautiful UI */}
       <div className="bg-gradient-to-br from-white via-gray-50 to-white p-8 rounded-2xl shadow-xl border border-gray-200 mb-8 relative overflow-hidden">

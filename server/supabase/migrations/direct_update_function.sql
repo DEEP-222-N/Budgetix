@@ -1,7 +1,7 @@
 -- Direct function to update financial overview total expenses
 -- This can be called directly from your frontend code
 
--- Create a simple RPC function to update total expenses
+-- Create a simple RPC function to update total expenses (current month only)
 CREATE OR REPLACE FUNCTION public.update_total_expenses(user_id_param UUID)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -11,10 +11,11 @@ DECLARE
   total_expense DECIMAL(15, 2);
   result JSONB;
 BEGIN
-  -- Calculate total expenses for this user
+  -- Calculate total expenses for this user for the CURRENT MONTH only
   SELECT COALESCE(SUM(amount), 0) INTO total_expense
   FROM expenses
-  WHERE user_id = user_id_param;
+  WHERE user_id = user_id_param
+    AND DATE_TRUNC('month', date::date) = DATE_TRUNC('month', CURRENT_DATE);
   
   -- Update the financial_overview table
   UPDATE financial_overview
