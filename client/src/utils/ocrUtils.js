@@ -1,170 +1,115 @@
 import { createWorker } from 'tesseract.js';
 
-// Helper function to clean and normalize text
+// Helper function to clean and normalize text (preserves newlines for line-by-line parsing)
 const cleanText = (text) => {
   if (!text) return '';
-  // Replace multiple spaces with single space and trim
-  return text.replace(/\s+/g, ' ').trim();
+  return text
+    .split('\n')
+    .map(line => line.replace(/[ \t]+/g, ' ').trim())
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 };
 
-// Helper function to extract amount from text
+const extractAmountFromLine = (line) => {
+  // Try currency symbol followed by amount first
+  const withSymbol = line.match(/[₹$€£]\s*(\d[\d,.]*\d)/);
+  if (withSymbol) return parseAmount(withSymbol[1]);
+  // Try amount with decimal (like 5445.30)
+  const withDecimal = line.match(/(\d{1,3}(?:[,]\d{3})*\.\d{1,2})\b/);
+  if (withDecimal) return parseAmount(withDecimal[1]);
+  // Try any number with commas (like 5,445)
+  const withComma = line.match(/(\d{1,3}(?:,\d{3})+)/);
+  if (withComma) return parseAmount(withComma[1]);
+  // Plain number (at least 2 digits)
+  const plain = line.match(/\b(\d{2,})\b/);
+  if (plain) return parseAmount(plain[1]);
+  return null;
+};
+
 const extractAmount = (text) => {
   if (!text) return null;
-  
-    // Split text into lines and clean them
-  const lines = text.split('\n').map(line => line.trim()).filter(line => line.length > 0);
-  
-  // First pass: Look for exact "Total" pattern like in the receipt
+
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+
+  // Tier 1: "Grand Total" or "Total" that is NOT "Sub-Total" — scan bottom-up
+  // The final total on a receipt is almost always near the bottom.
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const lower = lines[i].toLowerCase();
+    if (/\b(?:grand\s*total|total\s*amount|amount\s*payable|payable\s*amount|balance\s*due|bill\s*amount|final\s*amount|net\s*payable)\b/.test(lower)) {
+      const amt = extractAmountFromLine(lines[i]);
+      if (amt && amt >= 1) {
+        console.log('Tier1 (grand total):', amt, 'from:', lines[i]);
+        return amt;
+      }
+    }
+  }
+
+  // Tier 2: Line with "Total" but NOT "Sub-Total"/"Subtotal" — bottom-up
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const lower = lines[i].toLowerCase();
+    if (/\btotal\b/.test(lower) && !/\bsub[-\s]?total\b/.test(lower)) {
+      const amt = extractAmountFromLine(lines[i]);
+      if (amt && amt >= 1) {
+        console.log('Tier2 (total):', amt, 'from:', lines[i]);
+        return amt;
+      }
+    }
+  }
+
+  // Tier 3: Sub-Total as fallback
+  for (let i = lines.length - 1; i >= 0; i--) {
+    const lower = lines[i].toLowerCase();
+    if (/\bsub[-\s]?total\b/.test(lower)) {
+      const amt = extractAmountFromLine(lines[i]);
+      if (amt && amt >= 1) {
+        console.log('Tier3 (sub-total):', amt, 'from:', lines[i]);
+        return amt;
+      }
+    }
+  }
+
+  // Tier 4: Lines with amount/payment keywords
+  const kwRe = /\b(?:amount|rs\.?|inr|net|due|payment|amt)\b/i;
+  for (let i = lines.length - 1; i >= 0; i--) {
+    if (kwRe.test(lines[i])) {
+      const amt = extractAmountFromLine(lines[i]);
+      if (amt && amt >= 10) {
+        console.log('Tier4 (keyword):', amt, 'from:', lines[i]);
+        return amt;
+      }
+    }
+  }
+
+  // Tier 5: Amount in words (e.g., "Rs Two Hundred Only")
   for (const line of lines) {
-    // Look for patterns like "Total 1,354.00" or "Total : 1,354.00"
-    const totalMatch = line.match(/total\s*[:\-]?\s*[₹$€£]?\s*(\d{1,3}(?:[.,]?\d{3})*(?:[.,]\d{1,2})?)/i);
-    if (totalMatch) {
-      const amount = parseAmount(totalMatch[1]);
-      if (amount) {
-        console.log('Found total amount:', amount, 'from line:', line);
-        return amount;
-      }
-    }
-    
-    // Look for amounts in words (e.g., 'Two Hundred Only')
-    const wordAmountMatch = line.match(/(?:rs\.?|inr|₹)\s*([A-Za-z\s-]+?)(?:\s+only)?\s*$/i);
-    if (wordAmountMatch) {
-      const amountInWords = wordAmountMatch[1].trim();
-      const amount = wordsToNumber(amountInWords);
-      if (amount) {
-        console.log('Found amount in words:', amount, 'from:', wordAmountMatch[0]);
-        return amount;
+    const wordMatch = line.match(/(?:rs\.?|inr|₹)\s*([A-Za-z\s-]+?)(?:\s+only)?\s*$/i);
+    if (wordMatch) {
+      const amt = wordsToNumber(wordMatch[1].trim());
+      if (amt) {
+        console.log('Tier5 (words):', amt, 'from:', line);
+        return amt;
       }
     }
   }
-  
-  // Second pass: Look for amounts near total keywords
-  const totalKeywords = [
-    'total', 'net', 'grand total', 'final amount', 'amount payable', 
-    'payable amount', 'balance due', 'bill amount', 'amount', 'rs.',
-    'subtotal', 'gross amount', 'total amount', 'total due'
-  ];
-  
+
+  // Tier 6: Last resort — find the largest currency-prefixed amount
+  const allAmounts = [];
   for (const line of lines) {
-    const lowerLine = line.toLowerCase();
-    
-    // Check if this line contains any of our total keywords
-    const hasKeyword = totalKeywords.some(keyword => lowerLine.includes(keyword));
-    
-    if (hasKeyword) {
-      console.log('Found line with total keyword:', line);
-      
-      // Look for amounts in this line (with or without currency symbol)
-      // First try with currency symbol
-      let amountMatch = line.match(/[₹$€£]\s*(\d{1,3}(?:[.,]?\d{3})*(?:[.,]\d{1,2})?)/);
-      
-      // If no match with currency symbol, try without
-      if (!amountMatch) {
-        amountMatch = line.match(/(?:^|\s)(\d{1,3}(?:[.,]?\d{3})*(?:[.,]\d{1,2})?)(?:\s|$)/);
-      }
-      
-      if (amountMatch) {
-        const amount = parseAmount(amountMatch[1] || amountMatch[0]);
-        if (amount && amount >= 10) {
-          console.log('Found amount:', amount, 'in line:', line.trim());
-          return amount;
-        }
-      }
-      
-      // If no amount with currency symbol, look for any number that could be an amount
-      const anyNumberMatch = line.match(/(?:^|\s)(\d{1,3}(?:[.,]?\d{3})*(?:[.,]\d{1,2})?)(?:\s|$)/);
-      if (anyNumberMatch) {
-        const amount = parseAmount(anyNumberMatch[1]);
-        if (amount && amount >= 10) {
-          console.log('Found amount without currency symbol:', amount, 'in line:', line.trim());
-          return amount;
-        }
+    const matches = line.match(/[₹$€£]\s*\d[\d,. ]*/g) || [];
+    for (const m of matches) {
+      const amt = parseAmount(m);
+      if (amt && amt >= 10 && amt < 1000000 && !isLikelyNotAnAmount(m, line)) {
+        allAmounts.push(amt);
       }
     }
   }
-  
-  // Second pass: Look for common total patterns
-  const totalPatterns = [
-    // Look for "Total" followed by an amount
-    /(?:^|\s)(?:total|net|grand total|final amount|amount payable|balance due)\s*[^\w]\s*[₹$€£]?\s*(\d{1,3}(?:[.,]?\d{3})*(?:[.,]\d{1,2})?)/gi,
-    // Look for amounts at the end of lines (common for totals)
-    /[₹$€£]\s*(\d{1,3}(?:[.,]?\d{3})*(?:[.,]\d{1,2})?)\s*$/gm,
-    // Look for amounts after common payment terms
-    /(?:amount|balance|due|payment|amt|rs|inr|usd|eur|gbp|gst|g\.tot|gross)[^\d]*[₹$€£]?\s*(\d{1,3}(?:[.,]?\d{3})*(?:[.,]\d{1,2})?)/gi,
-  ];
-  
-  // Try to find the total amount first
-  for (const pattern of totalPatterns) {
-    const matches = [...text.matchAll(pattern)];
-    for (const match of matches) {
-      const amountStr = match[1] || match[0].replace(/[^\d.,-]/g, '');
-      const amount = parseAmount(amountStr);
-      if (amount && amount > 0) {
-        console.log('Found total amount:', amount, 'using pattern:', pattern);
-        return amount;
-      }
-    }
+  if (allAmounts.length > 0) {
+    const largest = Math.max(...allAmounts);
+    console.log('Tier6 (largest currency amount):', largest);
+    return largest;
   }
-  
-  // If no total found in the first pass, look for all potential amounts
-  const potentialAmounts = [];
-  
-  for (const line of lines) {
-    // Skip empty lines
-    if (line.trim().length === 0) continue;
-    
-    // Look for numbers that might be amounts
-    const amountMatches = line.match(/[₹$€£]?\s*\d{1,3}(?:[.,]?\d{3})*(?:[.,]\d{1,2})?/g) || [];
-    
-    for (const match of amountMatches) {
-      const amount = parseAmount(match);
-      
-      // Only consider amounts in a reasonable range for a receipt
-      if (amount && amount >= 10 && amount < 100000) {
-        // Skip numbers that look like dates, phone numbers, etc.
-        if (!isLikelyNotAnAmount(match, line)) {
-          // Calculate priority:
-          // 3: Amount is on its own line (likely a total)
-          // 2: Amount is with currency symbol
-          // 1: Regular amount
-          let priority = 1;
-          const trimmedLine = line.trim();
-          
-          if (trimmedLine === match.trim()) {
-            priority = 3; // Amount is the only thing on the line
-          } else if (/[₹$€£]/.test(match)) {
-            priority = 2; // Amount has a currency symbol
-          }
-          
-          potentialAmounts.push({ amount, priority, line: line.trim() });
-        }
-      }
-    }
-  }
-  
-  // Sort by priority (highest first) and then by amount (largest first)
-  potentialAmounts.sort((a, b) => {
-    if (a.priority !== b.priority) return b.priority - a.priority;
-    return b.amount - a.amount;
-  });
-  
-  // Log all potential amounts with their details for debugging
-  console.log('Potential amounts found:');
-  potentialAmounts.forEach((item, index) => {
-    console.log(`  ${index + 1}. Amount: ${item.amount}, Priority: ${item.priority}, Line: "${item.line}"`);
-  });
-  
-  // Extract just the amounts
-  const sortedAmounts = potentialAmounts.map(item => item.amount);
-  
-  console.log('Potential amounts found:', sortedAmounts);
-  
-  // If we found potential amounts, return the highest priority one (or largest if same priority)
-  if (sortedAmounts.length > 0) {
-    console.log('Using amount:', sortedAmounts[0]);
-    return sortedAmounts[0];
-  }
-  
+
   return null;
 };
 
@@ -307,41 +252,74 @@ function isLikelyNotAnAmount(num, fullText) {
   return false;
 }
 
-// Helper function to extract date from text
+const pad2 = (n) => String(n).padStart(2, '0');
+
 const extractDate = (text) => {
   if (!text) return null;
-  
-  // Common date formats in receipts
-  const datePatterns = [
-    // MM/DD/YYYY or DD/MM/YYYY
-    /(\d{1,2}[\/.-]\d{1,2}[\/.-]\d{2,4})/,
-    // YYYY-MM-DD
-    /(\d{4}[-.]\d{1,2}[-.]\d{1,2})/,
-    // Month DD, YYYY (Jan 01, 2023)
-    /([A-Za-z]{3,9}\s+\d{1,2}[,.]?\s+\d{4})/,
-    // DD Month YYYY (01 Jan 2023)
-    /(\d{1,2}\s+[A-Za-z]{3,9}\s+\d{4})/
-  ];
-  
-  for (const pattern of datePatterns) {
-    const match = text.match(pattern);
-    if (match) {
-      try {
-        let dateStr = match[0];
-        // Clean up the date string
-        dateStr = dateStr.replace(/[.,]/g, '').replace(/\s+/g, ' ').trim();
-        
-        // Try parsing the date
-        const date = new Date(dateStr);
-        if (!isNaN(date.getTime())) {
-          return date.toISOString().split('T')[0];
-        }
-      } catch (e) {
-        console.error('Error parsing date:', e);
-      }
+
+  const months = {
+    jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3,
+    apr: 4, april: 4, may: 5, jun: 6, june: 6, jul: 7, july: 7,
+    aug: 8, august: 8, sep: 9, sept: 9, september: 9, oct: 10, october: 10,
+    nov: 11, november: 11, dec: 12, december: 12
+  };
+
+  const tryFormat = (d, m, y) => {
+    if (y < 100) y += 2000;
+    if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+    return `${y}-${pad2(m)}-${pad2(d)}`;
+  };
+
+  const lines = text.split('\n');
+
+  const parseDateFromLine = (line) => {
+    // YYYY-MM-DD (unambiguous)
+    const iso = line.match(/(\d{4})[\/.-](\d{1,2})[\/.-](\d{1,2})/);
+    if (iso) {
+      const r = tryFormat(+iso[3], +iso[2], +iso[1]);
+      if (r) return r;
+    }
+
+    // DD/MM/YYYY or DD-MM-YYYY
+    const dmy = line.match(/(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2,4})/);
+    if (dmy) {
+      const a = +dmy[1], b = +dmy[2], y = +dmy[3];
+      if (a > 12) return tryFormat(a, b, y);
+      if (b > 12) return tryFormat(b, a, y);
+      return tryFormat(a, b, y); // default DD/MM/YYYY
+    }
+
+    // "Jan 01, 2023"
+    const mdy = line.match(/([A-Za-z]{3,9})\s+(\d{1,2})[,.]?\s+(\d{4})/);
+    if (mdy) {
+      const m = months[mdy[1].toLowerCase()];
+      if (m) return tryFormat(+mdy[2], m, +mdy[3]);
+    }
+
+    // "01 Jan 2023"
+    const dmn = line.match(/(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})/);
+    if (dmn) {
+      const m = months[dmn[2].toLowerCase()];
+      if (m) return tryFormat(+dmn[1], m, +dmn[3]);
+    }
+
+    return null;
+  };
+
+  // First pass: prefer lines that contain a "date" keyword
+  for (const line of lines) {
+    if (/\bdate\b/i.test(line)) {
+      const d = parseDateFromLine(line);
+      if (d) return d;
     }
   }
-  
+
+  // Second pass: any line with a date
+  for (const line of lines) {
+    const d = parseDateFromLine(line);
+    if (d) return d;
+  }
+
   return null;
 };
 
@@ -478,53 +456,9 @@ export const processReceipt = async (file) => {
         await worker.initialize();
       }
       
-      // Set worker parameters for better recognition
       await worker.setParameters({
-        tessedit_pageseg_mode: '6', // Assume a single uniform block of text
-        tessedit_ocr_engine_mode: '1', // LSTM only (more reliable)
-        tessedit_char_whitelist: '0123456789$€£₹., /-ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz&\'\n',
+        tessedit_pageseg_mode: '6',
         preserve_interword_spaces: '1',
-        tessedit_pageseg_autoscale: '1',
-        tessedit_pageseg_apply_margin: '1',
-        tessedit_pageseg_apply_justify: '1',
-        textord_debug_tabfind: '0',
-        textord_tabfind_vertical_text: '1',
-        textord_tabfind_vertical_horizontal_mix: '1',
-        textord_tabfind_vertical_text_ratio: '0.5',
-        textord_tabfind_vertical_writing: '1',
-        textord_tabfind_vertical_h_mixing: '1',
-        textord_tabfind_vertical_h_mixing_ratio: '1.0',
-        textord_tabfind_vertical_box_ratio: '0.25',
-        textord_tabfind_vertical_text_ratio: '0.5',
-        textord_tabfind_vertical_ratio: '1.0',
-        textord_tabfind_vertical_ratio_range: '0.5',
-        textord_tabfind_vertical_text_ratio: '0.5',
-        textord_tabfind_vertical_text_ratio_range: '0.5',
-        textord_tabfind_vertical_text_ratio_range2: '0.5',
-        textord_tabfind_vertical_text_ratio_range3: '0.5',
-        textord_tabfind_vertical_text_ratio_range4: '0.5',
-        textord_tabfind_vertical_text_ratio_range5: '0.5',
-        textord_tabfind_vertical_text_ratio_range6: '0.5',
-        textord_tabfind_vertical_text_ratio_range7: '0.5',
-        textord_tabfind_vertical_text_ratio_range8: '0.5',
-        textord_tabfind_vertical_text_ratio_range9: '0.5',
-        textord_tabfind_vertical_text_ratio_range10: '0.5',
-        textord_tabfind_vertical_text_ratio_range11: '0.5',
-        textord_tabfind_vertical_text_ratio_range12: '0.5',
-        textord_tabfind_vertical_text_ratio_range13: '0.5',
-        textord_tabfind_vertical_text_ratio_range14: '0.5',
-        textord_tabfind_vertical_text_ratio_range15: '0.5',
-        textord_tabfind_vertical_text_ratio_range16: '0.5',
-        textord_tabfind_vertical_text_ratio_range17: '0.5',
-        textord_tabfind_vertical_text_ratio_range18: '0.5',
-        textord_tabfind_vertical_text_ratio_range19: '0.5',
-        textord_tabfind_vertical_text_ratio_range20: '0.5',
-        tessedit_create_hocr: '0',
-        tessedit_create_tsv: '0',
-        tessedit_create_pdf: '0',
-        tessedit_create_box: '0',
-        tessedit_create_txt: '1',
-        tessedit_write_images: '0'
       });
       
       console.log('Processing image...');
@@ -533,9 +467,7 @@ export const processReceipt = async (file) => {
       let text = '';
       
       try {
-        // First try with the processed image
         const result = await worker.recognize(processedImageUrl, {
-          rectangle: { top: 0, left: 0, width: 1000, height: 2000 },
           rotateAuto: true
         });
         text = result.data.text;
@@ -549,10 +481,7 @@ export const processReceipt = async (file) => {
             preserve_interword_spaces: '1'
           });
           
-          const result = await worker.recognize(imageDataUrl, {
-            rectangle: null,
-            rotateAuto: false
-          });
+          const result = await worker.recognize(imageDataUrl);
           text = result.data.text;
         } catch (secondPassError) {
           console.error('Second pass failed:', secondPassError);
