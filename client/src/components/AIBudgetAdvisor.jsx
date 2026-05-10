@@ -9,6 +9,8 @@ const AIBudgetAdvisor = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [promptResponse, setPromptResponse] = useState(null);
+  const [customBudget, setCustomBudget] = useState(null);
+  const [budgetLoading, setBudgetLoading] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -34,7 +36,11 @@ const AIBudgetAdvisor = () => {
       }
       
       const data = await response.json();
-      setSuggestion(data.suggestion);
+      // suggestion can be a string (from AI) or an object { message, isFallback } (from fallback)
+      const text = typeof data.suggestion === 'string'
+        ? data.suggestion
+        : data.suggestion?.message || '';
+      setSuggestion(text);
     } catch (err) {
       console.error('Error getting AI suggestion:', err);
       setError('Failed to get suggestion. Please try again.');
@@ -107,11 +113,30 @@ const AIBudgetAdvisor = () => {
             <p className="mb-3 font-medium text-blue-900">Do you want the AI to build a customized AI budget?</p>
             <div className="flex gap-4">
               <button
-                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none"
-                onClick={() => setPromptResponse('yes')}
+                className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 focus:outline-none disabled:opacity-50"
+                onClick={async () => {
+                  setPromptResponse('yes');
+                  setBudgetLoading(true);
+                  try {
+                    const response = await fetch('http://localhost:5000/api/ai/custom-budget-50-30-20', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ userId: user.id, aiSuggestion: suggestion })
+                    });
+                    if (response.ok) {
+                      const data = await response.json();
+                      setCustomBudget(data);
+                    }
+                  } catch (err) {
+                    console.error('Error building custom budget:', err);
+                  } finally {
+                    setBudgetLoading(false);
+                  }
+                }}
+                disabled={budgetLoading}
                 type="button"
               >
-                Yes
+                {budgetLoading ? 'Building...' : 'Yes'}
               </button>
               <button
                 className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 focus:outline-none"
@@ -121,8 +146,20 @@ const AIBudgetAdvisor = () => {
                 No
               </button>
             </div>
-            {promptResponse === 'yes' && (
-              <div className="mt-3 text-green-700 font-semibold">Great! The AI will help you build a customized budget.</div>
+            {promptResponse === 'yes' && customBudget && (
+              <div className="mt-3 p-4 bg-green-50 rounded-lg border border-green-200">
+                <p className="font-semibold text-green-800 mb-2">Your 50/30/20 Budget Plan</p>
+                <div className="text-sm text-green-700 space-y-1">
+                  <p><strong>Monthly Income:</strong> ₹{customBudget.monthlyIncome?.toLocaleString('en-IN')}</p>
+                  <p><strong>AI Suggested Savings:</strong> ₹{customBudget.aiSuggestedSavings?.toLocaleString('en-IN')}/month</p>
+                  <p><strong>Remaining for spending:</strong> ₹{customBudget.remaining?.toLocaleString('en-IN')}</p>
+                  <div className="mt-2 pt-2 border-t border-green-300">
+                    <p>🏠 <strong>Needs (50%):</strong> ₹{customBudget.breakdown?.needs?.toLocaleString('en-IN')}</p>
+                    <p>🎉 <strong>Wants (30%):</strong> ₹{customBudget.breakdown?.wants?.toLocaleString('en-IN')}</p>
+                    <p>💰 <strong>Extra Savings (20%):</strong> ₹{customBudget.breakdown?.extra?.toLocaleString('en-IN')}</p>
+                  </div>
+                </div>
+              </div>
             )}
             {promptResponse === 'no' && (
               <div className="mt-3 text-red-700 font-semibold">No problem! You can always ask for help later.</div>

@@ -357,10 +357,18 @@ const BudgetManager = () => {
         if (budgetError && budgetError.code !== 'PGRST116') {
           setError('Failed to load budget data');
         }
+        // Filter expenses by selected month/year using date range
+        const startDate = `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-01`;
+        const endMonth = selectedMonth === 11 ? 0 : selectedMonth + 1;
+        const endYear = selectedMonth === 11 ? selectedYear + 1 : selectedYear;
+        const endDate = `${endYear}-${String(endMonth + 1).padStart(2, '0')}-01`;
+
         const { data: expenseData, error: expenseError } = await supabase
           .from('expenses')
           .select('category, amount')
-          .eq('user_id', user.id);
+          .eq('user_id', user.id)
+          .gte('date', startDate)
+          .lt('date', endDate);
         if (expenseError) {
           setError('Failed to load expense data');
           return;
@@ -397,13 +405,23 @@ const BudgetManager = () => {
           }));
           setCategoryBudgetInputs(allCategories.map(name => String(budgetData[getCategoryColumnName(name)] || 200)));
         } else {
-          setCategoryBudgets(prev =>
-            prev.map(cat => ({
-              ...cat,
-              current: spentMap[cat.name] || 0
+          // No budget for this month — reset to defaults
+          console.log('ℹ️ No budget found for', monthNames[selectedMonth], selectedYear, '— using defaults');
+          setMonthlyBudget(0);
+          setMonthlySavingsGoal('');
+          setMonthlyInvestmentGoal('');
+          setAchievableGoal('');
+          setMonthsToAchieveGoal('');
+          const key = getMonthKey(selectedMonth, selectedYear);
+          setExtraIncomes(prev => ({ ...prev, [key]: [] }));
+          setCategoryBudgets(
+            allCategories.map(name => ({
+              name,
+              budget: 0,
+              current: spentMap[name] || 0
             }))
           );
-          setCategoryBudgetInputs(prev => prev.map(() => undefined));
+          setCategoryBudgetInputs(allCategories.map(() => undefined));
         }
       } catch (err) {
         setError('An unexpected error occurred');
@@ -1152,18 +1170,18 @@ const BudgetManager = () => {
             <div className="flex space-x-4">
             <select
               value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
+                onChange={(e) => setSelectedMonth(Number(e.target.value))}
                 className="flex-1 px-4 py-3 bg-white border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               >
-                {monthNames.map((month) => (
-                  <option key={month} value={month}>
+                {monthNames.map((month, index) => (
+                  <option key={month} value={index}>
                     {month}
                   </option>
               ))}
             </select>
             <select
               value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value)}
+                onChange={(e) => setSelectedYear(Number(e.target.value))}
                 className="flex-1 px-4 py-3 bg-white border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               >
                 {years.map((year) => (

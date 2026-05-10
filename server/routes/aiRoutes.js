@@ -269,15 +269,10 @@ router.post('/suggest-budget', async (req, res) => {
         });
       }
 
-      if (!budgets || budgets.length === 0) {
-        console.log('No budget data found for user:', userId);
-        return res.status(404).json({
-          error: 'No budget data found',
-          details: 'Please set up your budget first'
-        });
-      }
-
-      const currentBudget = budgets[0];
+      // Use empty budget if none exists — don't block new users
+      const currentBudget = (budgets && budgets.length > 0)
+        ? budgets[0]
+        : { monthly_budget_total: 0 };
       console.log('Found budget data:', currentBudget);
 
       // Get financial overview data
@@ -290,12 +285,7 @@ router.post('/suggest-budget', async (req, res) => {
         .limit(1);
 
       if (overviewError) {
-        console.error('Error fetching financial overview:', overviewError);
-        return res.status(500).json({
-          error: 'Failed to fetch financial overview',
-          details: overviewError.message,
-          code: overviewError.code
-        });
+        console.warn('Could not fetch financial overview, using defaults:', overviewError.message);
       }
 
       // Use mock data if no financial overview exists
