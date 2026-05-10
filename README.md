@@ -1,4 +1,4 @@
-# Budgetix - Personal Finance Manager
+# Budgetix - Budget AI Assistant
 
 Budgetix is a modern, full-stack personal finance management application that helps you track expenses, manage budgets, and gain insights into your spending habits.
 
