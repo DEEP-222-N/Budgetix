@@ -202,11 +202,22 @@ Examples:
         return result.response;
       });
       const response = await result;
-      const text = await response.text();
-      
+      let text = await response.text();
+
+      // Clean markdown code blocks if present
+      text = text.trim();
+      if (text.startsWith('```json')) {
+        text = text.replace(/```json\s*/, '').replace(/```\s*$/, '');
+      } else if (text.startsWith('```')) {
+        text = text.replace(/```\s*/, '').replace(/```\s*$/, '');
+      }
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) text = jsonMatch[0];
+
       try {
         return JSON.parse(text);
       } catch (parseError) {
+        console.error('Failed to parse expense response:', text);
         return {
           expenses: [],
           message: "I couldn't understand your expense. Could you please be more specific?"
@@ -328,18 +339,18 @@ Examples:
         return { amount: 0, months: 24, isValid: false, reason: 'Not a meaningful financial goal' };
       }
       
-      // Match patterns like "5 cr", "300k", "5000" etc.
-      const amountMatch = prompt.match(/(\d+(?:\.\d+)?)(?:\s*(?:lakhs?|cr(?:ores?)?|k|thousand|million|mn|m|billion|bn|b)|\s*[a-z]*)/i);
+      // Match patterns like "5 cr", "300k", "5000", "5 lakhs", "₹50,000" etc.
+      const amountMatch = prompt.match(/₹?\s*(\d+(?:[.,]\d+)?)\s*(lakhs?|cr(?:ores?)?|k|thousand|million|mn|m|billion|bn|b)?/i);
       // Match time periods like "in 24 months", "for 1 year", "in 6 months" etc.
-      const timeMatch = prompt.match(/(?:in|for)\s*(\d+)\s*(months?|years?|yrs?|mos?)/i);
-      
-      let amount = amountMatch ? parseFloat(amountMatch[1]) : 0;
+      const timeMatch = prompt.match(/(?:in|for|within)\s*(\d+)\s*(months?|years?|yrs?|mos?)/i);
+
+      let amount = amountMatch ? parseFloat(amountMatch[1].replace(/,/g, '')) : 0;
       let timeValue = timeMatch ? parseInt(timeMatch[1]) : 24;
       let timeUnit = timeMatch ? timeMatch[2].toLowerCase() : 'months';
-      
+
       // Convert amount to base units (e.g., 5 cr -> 50000000, 300k -> 300000)
-      if (amountMatch) {
-        const unit = amountMatch[2]?.toLowerCase() || '';
+      if (amountMatch && amountMatch[2]) {
+        const unit = amountMatch[2].toLowerCase();
         if (unit.includes('cr') || unit.includes('crore')) amount *= 10000000;
         else if (unit.includes('lakh')) amount *= 100000;
         else if (unit === 'k' || unit.includes('thousand')) amount *= 1000;
@@ -604,12 +615,22 @@ Format each insight as a clear, actionable statement. Be specific with numbers a
 
         const text = await result.text();
         console.log('Successfully generated monthly insights');
-        
-        // Parse the response to extract insights
-        const lines = text.split('\n').filter(line => line.trim());
-        const insights = lines.slice(0, 3).map(line => line.replace(/^\d+\.\s*/, '').trim());
-        
-        return insights;
+
+        // Parse the response to extract insights — skip headers, empty lines, and bold-only labels
+        const lines = text.split('\n')
+          .map(line => line.trim())
+          .filter(line => {
+            if (!line) return false;
+            if (line.startsWith('#')) return false;           // skip markdown headers
+            if (/^\*\*[^*]+\*\*:?\s*$/.test(line)) return false; // skip bold-only labels
+            if (line.length < 15) return false;               // skip very short lines
+            return true;
+          })
+          .map(line => line.replace(/^\d+\.\s*/, '').replace(/^\*\*[^*]+\*\*:\s*/, '').trim());
+
+        const insights = lines.slice(0, 3);
+
+        return insights.length > 0 ? insights : this.generateFallbackMonthlyInsights(reportData);
         
       } catch (error) {
         console.error('AI API Error for monthly insights:', {
@@ -629,34 +650,44 @@ Format each insight as a clear, actionable statement. Be specific with numbers a
 
   generateFallbackMonthlyInsights(reportData) {
     const insights = [];
-    
-    // Insight 1: Budget usage analysis
-    if (reportData.budgetUsage > 100) {
-      insights.push(`You're ${(reportData.budgetUsage - 100).toFixed(1)}% over budget this month. Consider reviewing your top expense categories for potential reductions.`);
-    } else if (reportData.budgetUsage > 80) {
-      insights.push(`You're using ${reportData.budgetUsage.toFixed(1)}% of your budget. Great discipline! You have ${(100 - reportData.budgetUsage).toFixed(1)}% remaining for unexpected expenses.`);
-    } else {
-      insights.push(`You're only using ${reportData.budgetUsage.toFixed(1)}% of your budget. Consider allocating more to savings or investment goals.`);
+    const txn = reportData.totalTransactions || 0;
+    const total = reportData.totalExpenses || 0;
+    const budget = reportData.totalBudget || 0;
+    const usage = reportData.budgetUsage || 0;
+
+    // Handle very low activity months first
+    if (txn <= 2 && total < 100) {
+      insights.push(`Very light spending month — only ${txn} transaction${txn === 1 ? '' : 's'} totalling ₹${total.toLocaleString()}. This is either a great savings month or you may not have logged all expenses.`);
+    } else if (usage > 100) {
+      insights.push(`You're ${(usage - 100).toFixed(1)}% over your ₹${budget.toLocaleString()} budget this month with ₹${total.toLocaleString()} spent. Review your top categories and set stricter limits.`);
+    } else if (usage > 80) {
+      insights.push(`You've used ${usage.toFixed(1)}% of your budget (₹${total.toLocaleString()} of ₹${budget.toLocaleString()}). You're close to the limit — be careful with remaining spending.`);
+    } else if (usage > 20) {
+      insights.push(`You've used ${usage.toFixed(1)}% of your budget. Good discipline! You have ₹${(budget - total).toLocaleString()} remaining this month.`);
+    } else if (budget > 0) {
+      insights.push(`You've only spent ₹${total.toLocaleString()} out of your ₹${budget.toLocaleString()} budget (${usage.toFixed(1)}%). If the month is ending, consider moving the surplus to savings.`);
     }
-    
-    // Insight 2: Top category analysis
-    const topCategory = Object.entries(reportData.categoryBreakdown || {}).sort((a, b) => b[1] - a[1])[0];
-    if (topCategory) {
-      const [category, amount] = topCategory;
-      const percentage = ((amount / reportData.totalExpenses) * 100).toFixed(1);
-      insights.push(`Your highest expense category is ${category} at ${percentage}% of total spending (₹${amount.toLocaleString()}). Review if this aligns with your priorities.`);
+
+    // Top category — only meaningful with multiple categories
+    const categories = Object.entries(reportData.categoryBreakdown || {}).sort((a, b) => b[1] - a[1]);
+    if (categories.length > 1) {
+      const [topCat, topAmt] = categories[0];
+      const pct = total > 0 ? ((topAmt / total) * 100).toFixed(0) : 0;
+      insights.push(`Your top spending category is ${topCat} at ₹${topAmt.toLocaleString()} (${pct}% of total). ${pct > 50 ? 'This dominates your spending — consider setting a category limit.' : 'Your spending is fairly balanced across categories.'}`);
+    } else if (categories.length === 1) {
+      const [cat, amt] = categories[0];
+      insights.push(`All your spending this month (₹${amt.toLocaleString()}) was in ${cat}. As you log more expenses across categories, you'll get better spending pattern analysis.`);
     }
-    
-    // Insight 3: Transaction pattern analysis
-    if (reportData.totalTransactions > 0) {
-      const avgAmount = reportData.averageTransaction;
-      if (avgAmount > (reportData.totalBudget * 0.1)) {
-        insights.push(`Your average transaction amount is ₹${avgAmount.toFixed(0)}, which is quite high. Consider breaking down large purchases or reviewing if smaller expenses are adding up.`);
-      } else {
-        insights.push(`Your average transaction amount is ₹${avgAmount.toFixed(0)}. This suggests good control over individual purchases. Focus on reducing the number of transactions if needed.`);
-      }
+
+    // Transaction pattern — context-aware
+    if (txn > 20) {
+      insights.push(`You made ${txn} transactions this month averaging ₹${(total / txn).toFixed(0)} each. Batching purchases (like weekly groceries) could help reduce impulse spending.`);
+    } else if (txn > 5) {
+      insights.push(`${txn} transactions this month averaging ₹${(total / txn).toFixed(0)} each. This is a healthy transaction frequency — keep tracking to spot trends.`);
+    } else if (txn > 0) {
+      insights.push(`Only ${txn} transaction${txn === 1 ? '' : 's'} recorded this month. Make sure to log all your expenses for a complete picture of your spending habits.`);
     }
-    
+
     return insights;
   }
 }

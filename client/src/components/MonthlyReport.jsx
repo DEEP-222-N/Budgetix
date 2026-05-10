@@ -39,6 +39,7 @@ const MonthlyReport = () => {
 	const [loading, setLoading] = useState(false);
 	const [aiInsights, setAiInsights] = useState([]);
 	const [generatingInsights, setGeneratingInsights] = useState(false);
+	const [recommendations, setRecommendations] = useState([]);
 	const [expandedSections, setExpandedSections] = useState({
 		summary: true,
 		charts: true,
@@ -61,6 +62,82 @@ const MonthlyReport = () => {
 	const COLORS = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#6B7280', '#EC4899', '#06B6D4', '#84CC16', '#F97316', '#8B5CF6', '#6366F1'];
 
 	const displayName = user?.user_metadata?.username || user?.user_metadata?.full_name || user?.email || 'User';
+
+	// Build data-aware fallback insights when Gemini is unavailable
+	const buildFallbackInsights = (report) => {
+		const insights = [];
+		const { totalExpenses, totalBudget, budgetUsage, categoryBreakdown, topExpenses, totalTransactions, averageTransaction } = report;
+
+		// Insight 1 — Handle low activity months properly
+		if (totalTransactions <= 2 && totalExpenses < 100) {
+			insights.push(`Very light spending month — only ${totalTransactions} transaction${totalTransactions === 1 ? '' : 's'} totalling ${symbol}${totalExpenses.toLocaleString()}. This is either a great savings month or you may not have logged all expenses.`);
+		} else if (totalBudget <= 0) {
+			insights.push(`You spent ${symbol}${totalExpenses.toLocaleString()} this month but haven't set a budget yet. Setting a monthly budget will help you track and control your spending.`);
+		} else if (budgetUsage > 100) {
+			insights.push(`You've exceeded your budget by ${(budgetUsage - 100).toFixed(1)}% (${symbol}${totalExpenses.toLocaleString()} spent vs ${symbol}${totalBudget.toLocaleString()} budget). Review your top categories to cut back.`);
+		} else if (budgetUsage > 80) {
+			insights.push(`You've used ${budgetUsage.toFixed(1)}% of your ${symbol}${totalBudget.toLocaleString()} budget. Close to the limit — be careful with remaining spending.`);
+		} else if (budgetUsage > 20) {
+			insights.push(`You've used ${budgetUsage.toFixed(1)}% of your budget. Good discipline! You have ${symbol}${(totalBudget - totalExpenses).toLocaleString()} remaining.`);
+		} else {
+			insights.push(`You've only spent ${symbol}${totalExpenses.toLocaleString()} out of your ${symbol}${totalBudget.toLocaleString()} budget (${budgetUsage.toFixed(1)}%). If the month is ending, consider moving the surplus to savings.`);
+		}
+
+		// Insight 2 — Top category (context-aware for single category)
+		const sorted = Object.entries(categoryBreakdown).sort((a, b) => b[1] - a[1]);
+		if (sorted.length > 1) {
+			const [topCat, topAmt] = sorted[0];
+			const pct = totalExpenses > 0 ? ((topAmt / totalExpenses) * 100).toFixed(0) : 0;
+			insights.push(`Your top spending category is ${topCat} at ${symbol}${topAmt.toLocaleString()} (${pct}% of total). ${pct > 50 ? 'This dominates your spending — consider setting a category limit.' : 'Your spending is fairly balanced.'}`);
+		} else if (sorted.length === 1) {
+			const [cat, amt] = sorted[0];
+			insights.push(`All spending this month (${symbol}${amt.toLocaleString()}) was in ${cat}. As you log more expenses across categories, you'll get better pattern analysis.`);
+		}
+
+		// Insight 3 — Transaction pattern (smart about low counts)
+		if (totalTransactions > 20) {
+			insights.push(`${totalTransactions} transactions averaging ${symbol}${averageTransaction.toFixed(0)} each. Batching purchases (e.g., weekly groceries) could help reduce impulse spending.`);
+		} else if (totalTransactions > 5) {
+			insights.push(`${totalTransactions} transactions averaging ${symbol}${averageTransaction.toFixed(0)} each. Healthy frequency — keep tracking to spot trends.`);
+		} else if (totalTransactions > 0) {
+			insights.push(`Only ${totalTransactions} transaction${totalTransactions === 1 ? '' : 's'} recorded. Make sure to log all your expenses for a complete picture of your spending.`);
+		} else {
+			insights.push('No transactions recorded this month. Start tracking your expenses to get personalized insights.');
+		}
+
+		return insights;
+	};
+
+	// Build data-aware quick tips for the recommendations section
+	const buildQuickTips = (report) => {
+		if (!report) return [];
+		const tips = [];
+		const sorted = Object.entries(report.categoryBreakdown || {}).sort((a, b) => b[1] - a[1]);
+
+		// Tip based on top category
+		if (sorted.length > 0) {
+			const [topCat, topAmt] = sorted[0];
+			tips.push(`Your highest category "${topCat}" accounts for ${symbol}${topAmt.toLocaleString()}. Check if any of these expenses can be reduced or substituted.`);
+		}
+
+		// Tip based on budget usage
+		if (report.budgetUsage > 100) {
+			tips.push(`You're ${(report.budgetUsage - 100).toFixed(0)}% over budget. Set stricter daily spending limits for the rest of the month.`);
+		} else if (report.budgetUsage > 75) {
+			tips.push(`You've used ${report.budgetUsage.toFixed(0)}% of your budget with days remaining. Track daily to avoid overspending.`);
+		} else if (report.totalBudget > 0) {
+			tips.push(`You still have ${symbol}${report.remaining.toLocaleString()} remaining. Consider moving some to savings or investments.`);
+		}
+
+		// Tip based on transaction frequency
+		if (report.totalTransactions > 20) {
+			tips.push(`${report.totalTransactions} transactions this month is quite frequent. Batching purchases (e.g., weekly groceries) can help reduce impulse spending.`);
+		} else if (report.totalTransactions > 0) {
+			tips.push(`${report.totalTransactions} transactions with an average of ${symbol}${report.averageTransaction.toFixed(0)} each. Keep monitoring to stay on track.`);
+		}
+
+		return tips;
+	};
 
 	useEffect(() => {
 		if (user) {
@@ -162,23 +239,39 @@ const MonthlyReport = () => {
 			});
 			if (response.ok) {
 				const data = await response.json();
-				setAiInsights(data.insights || []);
+				const insights = data.insights || [];
+				setAiInsights(insights.length > 0 ? insights : buildFallbackInsights(report));
 			} else {
-				setAiInsights([
-					"Your highest expense category this month might need attention.",
-					"Consider setting up a budget for better financial management.",
-					"Track your recurring expenses to identify potential savings."
-				]);
+				setAiInsights(buildFallbackInsights(report));
 			}
 		} catch (error) {
 			console.error('Error generating AI insights:', error);
-			setAiInsights([
-				"Your highest expense category this month might need attention.",
-				"Consider setting up a budget for better financial management.",
-				"Track your recurring expenses to identify potential savings."
-			]);
+			setAiInsights(buildFallbackInsights(report));
 		} finally {
 			setGeneratingInsights(false);
+		}
+
+		// Also fetch AI-powered recommendations for the tips section
+		try {
+			const recResponse = await fetch('http://localhost:5000/api/ai/monthly-insights', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					userId: user.id,
+					reportData: {
+						...report,
+						requestType: 'recommendations'
+					}
+				})
+			});
+			if (recResponse.ok) {
+				const recData = await recResponse.json();
+				if (recData.insights?.length > 0) {
+					setRecommendations(recData.insights);
+				}
+			}
+		} catch (err) {
+			console.log('Recommendations fallback to local tips');
 		}
 	};
 
@@ -203,7 +296,7 @@ const MonthlyReport = () => {
 			},
 			{ text: 'Monthly Financial Report', style: 'header', alignment: 'center', margin: [0, 0, 0, 10] },
 			{ text: `${reportData.month} ${reportData.year}`, style: 'subheader', alignment: 'center', margin: [0, 4, 0, 0] },
-			{ text: `User: ${displayName}`, alignment: 'center', margin: [0, 2, 0, 12] },
+			{ text: `User: ${displayName}`, alignment: 'center', margin: [0, 2, 0, 12], color: '#c8c8d8' },
 			{ text: `Generated on ${new Date().toLocaleDateString()}`, style: 'tiny', alignment: 'center', margin: [0, 0, 0, 16] },
 
 			{
@@ -224,21 +317,26 @@ const MonthlyReport = () => {
 						]
 					]
 				},
-				layout: 'lightHorizontalLines',
+				layout: {
+					hLineWidth: () => 0.5,
+					vLineWidth: () => 0,
+					hLineColor: () => '#334155',
+					fillColor: (row) => row === 0 ? '#16213e' : null
+				},
 				margin: [0, 0, 0, 16]
 			},
 
 			{ text: 'Category Breakdown', style: 'sectionTitle' },
 			// Capture charts as images
 			categoryChartRef.current && {
-				image: await toPng(categoryChartRef.current, { cacheBust: true, backgroundColor: '#ffffff' }),
+				image: await toPng(categoryChartRef.current, { cacheBust: true, backgroundColor: '#1a1a2e' }),
 				width: 480,
 				margin: [0, 8, 0, 16]
 			},
 
 			{ text: 'Daily Spending Trend', style: 'sectionTitle' },
 			dailyChartRef.current && {
-				image: await toPng(dailyChartRef.current, { cacheBust: true, backgroundColor: '#ffffff' }),
+				image: await toPng(dailyChartRef.current, { cacheBust: true, backgroundColor: '#1a1a2e' }),
 				width: 480,
 				margin: [0, 8, 0, 16]
 			},
@@ -247,7 +345,7 @@ const MonthlyReport = () => {
 				[
 					{ text: 'Payment Methods', style: 'sectionTitle' },
 					paymentChartRef.current && {
-						image: await toPng(paymentChartRef.current, { cacheBust: true, backgroundColor: '#ffffff' }),
+						image: await toPng(paymentChartRef.current, { cacheBust: true, backgroundColor: '#1a1a2e' }),
 						width: 480,
 						margin: [0, 8, 0, 16]
 					}
@@ -259,38 +357,62 @@ const MonthlyReport = () => {
 				table: {
 					widths: ['*', '*', 'auto', 'auto'],
 					body: [
-						[{ text: 'Description', bold: true }, { text: 'Category', bold: true }, { text: 'Amount', bold: true }, { text: 'Date', bold: true }],
+						[
+							{ text: 'Description', bold: true, color: '#7dd3fc' },
+							{ text: 'Category', bold: true, color: '#7dd3fc' },
+							{ text: 'Amount', bold: true, color: '#7dd3fc' },
+							{ text: 'Date', bold: true, color: '#7dd3fc' }
+						],
 						...reportData.topExpenses.map(exp => [
-							exp.description,
-							exp.category,
-							`${symbol}${Number(exp.amount).toLocaleString()}`,
-							new Date(exp.date).toLocaleDateString()
+							{ text: exp.description, color: '#e8e8e8' },
+							{ text: exp.category, color: '#a0a0b8' },
+							{ text: `${symbol}${Number(exp.amount).toLocaleString()}`, color: '#e8e8e8', bold: true },
+							{ text: new Date(exp.date).toLocaleDateString(), color: '#a0a0b8' }
 						])
 					]
 				},
-				layout: 'lightHorizontalLines',
+				layout: {
+					hLineWidth: () => 0.5,
+					vLineWidth: () => 0,
+					hLineColor: () => '#334155',
+					fillColor: (row) => row === 0 ? '#16213e' : null
+				},
 				margin: [0, 8, 0, 16]
 			},
 
 			{ text: 'AI Insights', style: 'sectionTitle' },
-			{ ul: aiInsights.map(i => `\u{1F4A1} ${i}`) },
+			{ ul: aiInsights.map(i => ({ text: i, color: '#e8e8e8', margin: [0, 2, 0, 2] })), markerColor: '#7dd3fc' },
 		];
+
+		const darkBg = '#1a1a2e';
+		const cardBg = '#16213e';
+		const accentBlue = '#0f3460';
+		const textLight = '#e8e8e8';
+		const textMuted = '#a0a0b8';
+		const accentGreen = '#4ade80';
+		const accentRed = '#f87171';
 
 		const docDefinition = {
 			info: { title: `Monthly Financial Report - ${reportData.month} ${reportData.year}` },
 			userPassword: password,
 			ownerPassword: password,
 			permissions: { printing: 'highResolution', modifying: false, copying: false, annotating: false, fillingForms: false, contentAccessibility: false, documentAssembly: false },
+			background: function () {
+				return { canvas: [{ type: 'rect', x: 0, y: 0, w: 595.28, h: 841.89, color: darkBg }] };
+			},
 			content,
+			defaultStyle: {
+				color: textLight
+			},
 			styles: {
-				header: { fontSize: 18, bold: true },
-				subheader: { fontSize: 12, color: '#4B5563' },
-				sectionTitle: { fontSize: 14, bold: true, margin: [0, 12, 0, 6] },
-				cardLabel: { bold: true, color: '#6B7280', margin: [0, 0, 0, 6] },
-				cardValue: { fontSize: 12, bold: true },
-				positive: { color: '#059669', bold: true },
-				negative: { color: '#DC2626', bold: true },
-				tiny: { fontSize: 8, color: '#6B7280' }
+				header: { fontSize: 18, bold: true, color: '#ffffff' },
+				subheader: { fontSize: 12, color: textMuted },
+				sectionTitle: { fontSize: 14, bold: true, margin: [0, 12, 0, 6], color: '#7dd3fc' },
+				cardLabel: { bold: true, color: textMuted, margin: [0, 0, 0, 6] },
+				cardValue: { fontSize: 12, bold: true, color: textLight },
+				positive: { color: accentGreen, bold: true },
+				negative: { color: accentRed, bold: true },
+				tiny: { fontSize: 8, color: textMuted }
 			},
 			pageMargins: [40, 40, 40, 40]
 		};
@@ -317,7 +439,7 @@ const MonthlyReport = () => {
 	}
 
 	return (
-		<div className="max-w-7xl mx-auto space-y-8">
+		<div className="max-w-7xl mx-auto space-y-8 min-h-screen bg-gradient-to-br from-slate-50 via-blue-50/40 to-indigo-50/30 p-6 rounded-2xl">
 			<div className="text-center">
 				<h1 className="text-3xl font-bold text-gray-900 mb-2">Monthly Financial Report</h1>
 				<p className="text-gray-600">Comprehensive analysis of your monthly spending patterns</p>
@@ -502,11 +624,13 @@ const MonthlyReport = () => {
 							))}
 							</div>
 							<div className="mt-6 p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg border border-green-200">
-								<h4 className="font-semibold text-green-900 mb-2">💡 Quick Tips</h4>
+								<h4 className="font-semibold text-green-900 mb-2">💡 Smart Recommendations</h4>
 								<ul className="text-sm text-green-800 space-y-1">
-									<li>• Review your top 3 expenses to identify potential savings</li>
-									<li>• Consider setting spending limits for high-expense categories</li>
-									<li>• Look for recurring expenses that could be optimized</li>
+									{recommendations.length > 0 ? recommendations.map((tip, i) => (
+										<li key={i}>• {tip}</li>
+									)) : buildQuickTips(reportData).map((tip, i) => (
+										<li key={i}>• {tip}</li>
+									))}
 								</ul>
 							</div>
 						</div>

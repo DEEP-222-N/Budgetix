@@ -148,19 +148,49 @@ const AddExpense = () => {
     try {
       setScanError('');
       setIsScanningReceipt(true);
-      
-      // Process the receipt using Tesseract.js
-      const result = await processReceipt(file);
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to process receipt');
+
+      let amount = null, date = null, merchantName = null, description = null, category = '';
+
+      // Try Gemini AI first (more accurate) then fall back to local Tesseract OCR
+      try {
+        const base64 = await fileToBase64(file);
+        const response = await fetch('http://localhost:5000/api/ai/scan-receipt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ base64Data: base64, mimeType: file.type })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          if (data.success && data.data && data.data.amount) {
+            amount = data.data.amount;
+            date = data.data.date ? data.data.date.split('T')[0] : null;
+            merchantName = data.data.merchantName || '';
+            description = data.data.description || '';
+            category = mapAiCategoryToAppCategory(data.data.category || merchantName);
+            console.log('Gemini scan successful:', data.data);
+          }
+        }
+      } catch (geminiError) {
+        console.log('Gemini scan failed, falling back to local OCR:', geminiError.message);
       }
-      
-      const { amount, date, merchantName, description } = result.data;
-      
-      // Map merchant name to category
-      const category = mapAiCategoryToAppCategory(merchantName);
-      
+
+      // Fallback to local Tesseract OCR if Gemini didn't return results
+      if (!amount) {
+        console.log('Using Tesseract OCR fallback...');
+        const result = await processReceipt(file);
+
+        if (!result.success) {
+          throw new Error(result.error || 'Failed to process receipt');
+        }
+
+        amount = result.data.amount;
+        date = result.data.date;
+        merchantName = result.data.merchantName || '';
+        description = result.data.description || '';
+        category = mapAiCategoryToAppCategory(merchantName);
+      }
+
       // Update form with extracted data
       setFormData(prev => ({
         ...prev,
@@ -169,7 +199,7 @@ const AddExpense = () => {
         description: description || prev.description,
         category: category || prev.category
       }));
-      
+
       setShowSuccess(true);
     } catch (error) {
       console.error('Error processing receipt:', error);
