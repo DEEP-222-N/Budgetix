@@ -99,7 +99,7 @@ const ExpenseCard = ({ expense }) => {
           {/* Amount */}
           <div className="text-right">
             <p className="text-2xl font-bold text-gray-900 group-hover:text-purple-700 transition-colors duration-300 tracking-tight">
-              {symbol}{expense.amount.toLocaleString()}
+              {symbol}{Number(expense.amount).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </p>
             <div className="flex items-center justify-end space-x-1.5 mt-2">
               <div className="w-2 h-2 bg-red-500 rounded-full"></div>

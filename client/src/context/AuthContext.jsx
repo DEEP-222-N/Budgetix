@@ -1,12 +1,5 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import { createClient } from '@supabase/supabase-js';
-
-// Direct Supabase connection
-// Uses environment variables from .env (REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY)
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+import { supabase } from '../lib/supabase';
 
 const AuthContext = createContext();
 
