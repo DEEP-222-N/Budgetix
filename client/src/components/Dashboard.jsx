@@ -30,6 +30,7 @@ const Dashboard = () => {
 const [extraIncomes, setExtraIncomes] = useState({});
 const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
 const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+const [showAllMonths, setShowAllMonths] = useState(false);
 
 // Helper to get key for month/year
 const getMonthKey = (month, year) => `${year}-${String(month + 1).padStart(2, '0')}`;
@@ -114,8 +115,6 @@ useEffect(() => {
 
 
 
-  // Month and year dropdown state for charts
-  const [selectedYearChart, setSelectedYearChart] = useState('All');
   const { symbol } = useCurrency();
   const navigate = useNavigate();
 
@@ -146,14 +145,14 @@ useEffect(() => {
     fetchExpenses();
   }, [user]);
 
-  // Fetch budgets for the selected year so the line chart uses per-month values
+  // Fetch budgets for the selected year so the line chart and summary cards use per-month values
   useEffect(() => {
     const fetchBudgetsForYear = async () => {
       if (!user) return;
       setBudgetsLoading(true);
       setBudgetsError(null);
       try {
-        const year = selectedYearChart === 'All' ? new Date().getFullYear() : parseInt(selectedYearChart);
+        const year = selectedYear;
         const { data, error } = await supabase
           .from('budgets')
           .select('budget_month, budget_year, monthly_budget_total')
@@ -183,24 +182,19 @@ useEffect(() => {
     };
     fetchBudgetsForYear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, selectedYearChart]);
-
-  // Get unique years from expenses
-  const years = React.useMemo(() => {
-    const set = new Set(expenses.map(e => new Date(e.date).getFullYear()));
-    return ['All', ...Array.from(set).sort((a, b) => b - a)];
-  }, [expenses]);
+  }, [user, selectedYear]);
 
 
-
-  // Filtered expenses by year
+  // Filtered expenses for pie/bar charts — respects month selector
   const filteredExpensesForGraphs = React.useMemo(() => {
     return expenses.filter(e => {
       const date = new Date(e.date);
-      const yearMatch = selectedYearChart === 'All' || date.getFullYear().toString() === selectedYearChart.toString();
-      return yearMatch;
+      if (showAllMonths) {
+        return date.getFullYear() === selectedYear;
+      }
+      return date.getMonth() === selectedMonth && date.getFullYear() === selectedYear;
     });
-  }, [expenses, selectedYearChart]);
+  }, [expenses, selectedMonth, selectedYear, showAllMonths]);
 
   // Calculate category breakdown for PieChart (filtered)
   const categoryData = React.useMemo(() => {
@@ -224,67 +218,69 @@ useEffect(() => {
     return Object.entries(map).map(([name, value]) => ({ name, value }));
   }, [filteredExpensesForGraphs]);
 
-  // Calculate monthly spent for the selected year
+  // Calculate monthly spent for the selected year (Monthly Trends chart — always shows full year)
   const monthlyLineData = React.useMemo(() => {
-    // Get months for the selected year
-    const year = selectedYearChart === 'All' ? new Date().getFullYear() : parseInt(selectedYearChart);
+    const year = selectedYear;
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    
-    // Initialize data with base budgets
+
     const data = Array.from({ length: 12 }, (_, i) => ({
       month: monthNames[i],
       spent: 0,
       budget: budgetsByMonth[i] ?? 0
     }));
-    
-    // Add extra income to the budget for each month
+
     Object.entries(extraIncomes).forEach(([key, incomes]) => {
       const [yearStr, monthStr] = key.split('-');
-      const monthIndex = parseInt(monthStr) - 1; // Convert to 0-based index
+      const monthIndex = parseInt(monthStr) - 1;
       const monthYear = parseInt(yearStr);
-      
-      if (selectedYearChart === 'All' || monthYear === parseInt(selectedYearChart)) {
-        const extra = incomes.reduce((sum, inc) => sum + (Number(inc.amount) || 0), 0);
-        data[monthIndex].budget = (data[monthIndex].budget || 0) + extra;
+
+      if (monthYear === year) {
+        const extraAmt = incomes.reduce((sum, inc) => sum + (Number(inc.amount) || 0), 0);
+        data[monthIndex].budget = (data[monthIndex].budget || 0) + extraAmt;
       }
     });
-    
-    // Filter expenses by year only
+
     expenses.forEach(exp => {
       const date = new Date(exp.date);
-      const yearMatch = selectedYearChart === 'All' || date.getFullYear() === year;
-      
-      if (yearMatch) {
-        const m = date.getMonth();
-        data[m].spent += Number(exp.amount) || 0;
+      if (date.getFullYear() === year) {
+        data[date.getMonth()].spent += Number(exp.amount) || 0;
       }
     });
-    
-    return data;
-  }, [expenses, selectedYearChart, budgetsByMonth]);
 
-  // Calculate spent for CURRENT MONTH ONLY (for the summary cards)
+    return data;
+  }, [expenses, selectedYear, budgetsByMonth, extraIncomes]);
+
+  // Calculate spent for selected period (for the summary cards)
   const currentMonthSpent = React.useMemo(() => {
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
     return expenses
       .filter(exp => {
         const d = new Date(exp.date);
-        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        if (showAllMonths) {
+          return d.getFullYear() === selectedYear;
+        }
+        return d.getMonth() === selectedMonth && d.getFullYear() === selectedYear;
       })
       .reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
-  }, [expenses]);
+  }, [expenses, selectedMonth, selectedYear, showAllMonths]);
 
-  // Calculate spent for selected period (used in charts)
-  const totalSpent = React.useMemo(() => {
-    return filteredExpensesForGraphs.reduce((sum, exp) => sum + (Number(exp.amount) || 0), 0);
-  }, [filteredExpensesForGraphs]);
-  
-  // Get extra income for current month and calculate total budget
-  const extra = getCurrentMonthExtraIncomes().reduce((sum, inc) => sum + (Number(inc.amount) || 0), 0);
-  const totalBudget = (Number(monthlyBudget) || 0) + extra;
-  // Summary cards use current month spent only
+  // Calculate budget based on selected period
+  const { totalBudget, baseBudget, extra: extraIncome } = React.useMemo(() => {
+    if (showAllMonths) {
+      // Sum all months' budgets + all months' extra incomes for the year
+      let yearBudget = 0;
+      let yearExtra = 0;
+      for (let m = 0; m < 12; m++) {
+        yearBudget += budgetsByMonth[m] ?? 0;
+        const key = getMonthKey(m, selectedYear);
+        const monthExtras = extraIncomes[key] || [];
+        yearExtra += monthExtras.reduce((sum, inc) => sum + (Number(inc.amount) || 0), 0);
+      }
+      return { totalBudget: yearBudget + yearExtra, baseBudget: yearBudget, extra: yearExtra };
+    }
+    const ext = getCurrentMonthExtraIncomes().reduce((sum, inc) => sum + (Number(inc.amount) || 0), 0);
+    const base = budgetsByMonth[selectedMonth] ?? (Number(monthlyBudget) || 0);
+    return { totalBudget: base + ext, baseBudget: base, extra: ext };
+  }, [showAllMonths, selectedMonth, selectedYear, budgetsByMonth, extraIncomes, monthlyBudget]);
   const remaining = totalBudget - currentMonthSpent;
   const budgetUsage = totalBudget > 0 ? (currentMonthSpent / totalBudget) * 100 : 0;
 
@@ -343,6 +339,55 @@ useEffect(() => {
 
       
 
+      {/* Month/Year Selector */}
+      <div className="bg-white rounded-xl shadow-md border border-gray-200 p-4">
+        <div className="flex items-center justify-between flex-wrap gap-4">
+          <div className="flex items-center gap-2">
+            <Calendar className="h-5 w-5 text-purple-600" />
+            <span className="text-sm font-semibold text-gray-700">Viewing:</span>
+            <span className="text-sm font-bold text-purple-700">
+              {showAllMonths
+                ? `All Months — ${selectedYear}`
+                : `${['January','February','March','April','May','June','July','August','September','October','November','December'][selectedMonth]} ${selectedYear}`}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => { setShowAllMonths(false); setSelectedMonth(new Date().getMonth()); setSelectedYear(new Date().getFullYear()); }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${!showAllMonths && selectedMonth === new Date().getMonth() && selectedYear === new Date().getFullYear() ? 'bg-purple-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              This Month
+            </button>
+            <button
+              onClick={() => setShowAllMonths(!showAllMonths)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 ${showAllMonths ? 'bg-purple-600 text-white shadow-md' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+            >
+              All Months
+            </button>
+            {!showAllMonths && (
+              <select
+                value={selectedMonth}
+                onChange={e => setSelectedMonth(Number(e.target.value))}
+                className="px-3 py-1.5 border border-gray-200 rounded-lg bg-white text-gray-800 font-medium text-xs focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-500 cursor-pointer"
+              >
+                {['January','February','March','April','May','June','July','August','September','October','November','December'].map((m, i) => (
+                  <option key={m} value={i}>{m}</option>
+                ))}
+              </select>
+            )}
+            <select
+              value={selectedYear}
+              onChange={e => setSelectedYear(Number(e.target.value))}
+              className="px-3 py-1.5 border border-gray-200 rounded-lg bg-white text-gray-800 font-medium text-xs focus:outline-none focus:ring-2 focus:ring-purple-300 focus:border-purple-500 cursor-pointer"
+            >
+              {Array.from(new Set([new Date().getFullYear(), ...expenses.map(e => new Date(e.date).getFullYear())])).sort((a, b) => b - a).map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         {/* Total Spent Card */}
@@ -350,8 +395,8 @@ useEffect(() => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm text-gray-600 mb-1">Total Spent</p>
-              <p className="text-2xl font-bold text-gray-900">{symbol}{currentMonthSpent.toLocaleString()}</p>
-              <p className="text-xs text-blue-600 font-medium mt-1">This Month</p>
+              <p className="text-2xl font-bold text-gray-900">{symbol}{currentMonthSpent.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+              <p className="text-xs text-blue-600 font-medium mt-1">{showAllMonths ? `Year ${selectedYear}` : `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][selectedMonth]} ${selectedYear}`}</p>
             </div>
             <div className="bg-blue-100 p-3 rounded-full">
               <Wallet className="h-6 w-6 text-blue-600" />
@@ -365,7 +410,7 @@ useEffect(() => {
             <div>
               <p className="text-sm text-gray-600 mb-1">Remaining</p>
               <p className={`text-2xl font-bold ${remaining < 0 ? 'text-red-600' : 'text-green-600'}`}>
-                {symbol}{remaining.toLocaleString()}
+                {symbol}{remaining.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
               <p className={`text-xs font-medium mt-1 ${remaining < 0 ? 'text-red-600' : 'text-green-600'}`}>
                 {remaining < 0 ? 'Over Budget' : 'Available'}
@@ -377,21 +422,15 @@ useEffect(() => {
           </div>
         </div>
 
-        {/* Monthly Budget Card */}
+        {/* Budget Card */}
         <div className="bg-white rounded-xl shadow-lg border border-gray-100 p-6 hover:shadow-xl transition-all duration-300">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm text-gray-600 mb-1">Monthly Budget</p>
-              {(() => {
-  const extra = getCurrentMonthExtraIncomes().reduce((sum, inc) => sum + (Number(inc.amount) || 0), 0);
-  const total = (Number(monthlyBudget) || 0) + extra;
-  return (
-    <div>
-      <span className="text-2xl font-bold text-gray-900">{symbol}{total.toLocaleString()}</span>
-      <div className="text-xs text-gray-500 mt-1">(Base: {symbol}{(Number(monthlyBudget)||0).toLocaleString()} + Extra: {symbol}{extra.toLocaleString()})</div>
-    </div>
-  );
-})()}
+              <p className="text-sm text-gray-600 mb-1">{showAllMonths ? 'Yearly Budget' : 'Monthly Budget'}</p>
+              <div>
+                <span className="text-2xl font-bold text-gray-900">{symbol}{totalBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                <div className="text-xs text-gray-500 mt-1">(Base: {symbol}{baseBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} + Extra: {symbol}{extraIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })})</div>
+              </div>
               <p className="text-xs text-purple-600 font-medium mt-1">Target</p>
             </div>
             <div className="bg-purple-100 p-3 rounded-full">
