@@ -9,6 +9,7 @@ import Signup from './components/Signup';
 import BudgetManager from './components/BudgetManager';
 import AllExpenses from './components/AllExpenses';
 import MonthlyReport from './components/MonthlyReport';
+import AICoach from './components/AICoach';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { CurrencyProvider } from './context/CurrencyContext';
 import { BudgetProvider } from './context/BudgetContext';
@@ -52,6 +53,7 @@ function AppContent() {
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </main>
+        <AICoach />
       </div>
     </Router>
   );

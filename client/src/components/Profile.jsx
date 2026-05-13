@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { useCurrency } from '../context/CurrencyContext';
 import { UserCircle, Save, Lock, Unlock, FileText, X, Trophy, Star, Target, TrendingUp } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import SubscriptionsList from './SubscriptionsList';
 
 const Profile = () => {
   const { user, login } = useAuth();
@@ -596,8 +597,10 @@ const Profile = () => {
           </div>
         )}
       </div>
+
+      <SubscriptionsList />
     </div>
   );
 };
 
-export default Profile; 
+export default Profile;

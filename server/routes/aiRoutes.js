@@ -416,18 +416,23 @@ router.post('/custom-budget-50-30-20', async (req, res) => {
   }
 });
 
-// Receipt scan endpoint
+// Receipt scan endpoint — uses the robust receiptOcrService chain (Asprise → Gemini)
+const receiptOcrService = require('../services/receiptOcrService');
 router.post('/scan-receipt', async (req, res) => {
   try {
     const { base64Data, mimeType } = req.body;
     if (!base64Data) {
       return res.status(400).json({ error: 'base64Data is required' });
     }
-    const result = await aiService.scanReceiptBase64({ base64Data, mimeType });
-    return res.json({ success: true, data: result });
+    const result = await receiptOcrService.scanReceipt({ base64Data, mimeType });
+    if (!result.success) {
+      // 200 with success:false so the client can read attempts[] and fall back to Tesseract.
+      return res.json({ success: false, error: result.error, attempts: result.attempts });
+    }
+    return res.json({ success: true, data: result.data, attempts: result.attempts });
   } catch (error) {
     console.error('scan-receipt error:', error);
-    res.status(500).json({ success: false, error: 'Failed to scan receipt' });
+    res.status(500).json({ success: false, error: 'Failed to scan receipt', details: error.message });
   }
 });
 
