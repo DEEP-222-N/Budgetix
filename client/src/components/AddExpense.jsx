@@ -1,7 +1,7 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import './AddExpense.css';
 import { useAuth } from '../context/AuthContext';
-import { CheckCircle, AlertCircle, X, Scan, Loader2 } from 'lucide-react';
+import { CheckCircle, AlertCircle, X, Scan, Loader2, Sparkles } from 'lucide-react';
 import { processReceipt } from '../utils/ocrUtils';
 
 
@@ -31,6 +31,42 @@ const AddExpense = () => {
   // Toast logic
   const [showError, setShowError] = useState(false);
   const [showSuccessToast, setShowSuccessToast] = useState(false);
+
+  // Smart AI category suggestion
+  const [aiCategorySuggestion, setAiCategorySuggestion] = useState(null);
+  const [loadingCategorySuggestion, setLoadingCategorySuggestion] = useState(false);
+
+  // Receipt scan preview (line items, source, tax, etc.)
+  const [scanPreview, setScanPreview] = useState(null);
+
+  useEffect(() => {
+    const desc = formData.description?.trim();
+    if (!desc || desc.length < 3 || !user) {
+      setAiCategorySuggestion(null);
+      return;
+    }
+    const handle = setTimeout(async () => {
+      setLoadingCategorySuggestion(true);
+      try {
+        const r = await fetch('http://localhost:5000/api/coach/categorize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: user.id, description: desc, amount: formData.amount || undefined })
+        });
+        const data = await r.json();
+        if (data?.success && data.suggestion?.category) {
+          setAiCategorySuggestion(data.suggestion);
+        } else {
+          setAiCategorySuggestion(null);
+        }
+      } catch {
+        setAiCategorySuggestion(null);
+      } finally {
+        setLoadingCategorySuggestion(false);
+      }
+    }, 700);
+    return () => clearTimeout(handle);
+  }, [formData.description, formData.amount, user]);
 
   React.useEffect(() => {
     if (showSuccess) {
@@ -147,11 +183,13 @@ const AddExpense = () => {
   const handleScanReceiptFile = async (file) => {
     try {
       setScanError('');
+      setScanPreview(null);
       setIsScanningReceipt(true);
 
       let amount = null, date = null, merchantName = null, description = null, category = '';
+      let scanMeta = null; // { source, items, tax, paymentMethod }
 
-      // Try Gemini AI first (more accurate) then fall back to local Tesseract OCR
+      // Try the server-side OCR chain (Asprise → Gemini). Fall back to client Tesseract on failure.
       try {
         const base64 = await fileToBase64(file);
         const response = await fetch('http://localhost:5000/api/ai/scan-receipt', {
@@ -164,18 +202,28 @@ const AddExpense = () => {
           const data = await response.json();
           if (data.success && data.data && data.data.amount) {
             amount = data.data.amount;
-            date = data.data.date ? data.data.date.split('T')[0] : null;
+            date = data.data.date ? String(data.data.date).split('T')[0] : null;
             merchantName = data.data.merchantName || '';
             description = data.data.description || '';
             category = mapAiCategoryToAppCategory(data.data.category || merchantName);
-            console.log('Gemini scan successful:', data.data);
+            scanMeta = {
+              source: data.data.source || 'server',
+              items: Array.isArray(data.data.items) ? data.data.items : [],
+              tax: data.data.tax,
+              subtotal: data.data.subtotal,
+              paymentMethod: data.data.paymentMethod,
+              currency: data.data.currency
+            };
+            console.log(`Server OCR scan successful via ${scanMeta.source}:`, data.data);
+          } else if (data.attempts) {
+            console.log('Server OCR exhausted, will try Tesseract:', data.attempts);
           }
         }
-      } catch (geminiError) {
-        console.log('Gemini scan failed, falling back to local OCR:', geminiError.message);
+      } catch (serverError) {
+        console.log('Server OCR scan failed, falling back to local OCR:', serverError.message);
       }
 
-      // Fallback to local Tesseract OCR if Gemini didn't return results
+      // Fallback to local Tesseract OCR if server didn't return an amount
       if (!amount) {
         console.log('Using Tesseract OCR fallback...');
         const result = await processReceipt(file);
@@ -189,6 +237,7 @@ const AddExpense = () => {
         merchantName = result.data.merchantName || '';
         description = result.data.description || '';
         category = mapAiCategoryToAppCategory(merchantName);
+        scanMeta = { source: 'tesseract', items: [], tax: null, subtotal: null, paymentMethod: null, currency: null };
       }
 
       // Update form with extracted data
@@ -199,6 +248,10 @@ const AddExpense = () => {
         description: description || prev.description,
         category: category || prev.category
       }));
+
+      if (scanMeta) {
+        setScanPreview({ ...scanMeta, amount, merchantName });
+      }
 
       setShowSuccess(true);
     } catch (error) {
@@ -435,6 +488,72 @@ const AddExpense = () => {
                 </div>
               </div>
             )}
+
+            {/* Scan Preview — shown after a successful scan */}
+            {scanPreview && (
+              <div className="mt-4 p-4 bg-white rounded-xl border border-purple-200 shadow-sm">
+                <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
+                  <div className="flex items-center gap-2 text-sm">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <span className="font-semibold text-gray-800">Receipt scanned</span>
+                    <span className="text-[10px] uppercase tracking-wide bg-purple-100 text-purple-800 px-1.5 py-0.5 rounded font-bold">
+                      {scanPreview.source}
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setScanPreview(null)}
+                    className="text-xs text-gray-400 hover:text-gray-700"
+                    aria-label="Dismiss scan preview"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs mb-3">
+                  {scanPreview.merchantName && (
+                    <div className="bg-gray-50 rounded-lg p-2">
+                      <p className="text-[10px] text-gray-500 uppercase font-semibold">Merchant</p>
+                      <p className="text-gray-800 truncate">{scanPreview.merchantName}</p>
+                    </div>
+                  )}
+                  {scanPreview.amount != null && (
+                    <div className="bg-gray-50 rounded-lg p-2">
+                      <p className="text-[10px] text-gray-500 uppercase font-semibold">Total</p>
+                      <p className="text-gray-800 font-bold">{scanPreview.currency || ''}{scanPreview.amount}</p>
+                    </div>
+                  )}
+                  {scanPreview.tax != null && (
+                    <div className="bg-gray-50 rounded-lg p-2">
+                      <p className="text-[10px] text-gray-500 uppercase font-semibold">Tax</p>
+                      <p className="text-gray-800">{scanPreview.tax}</p>
+                    </div>
+                  )}
+                  {scanPreview.paymentMethod && (
+                    <div className="bg-gray-50 rounded-lg p-2">
+                      <p className="text-[10px] text-gray-500 uppercase font-semibold">Payment</p>
+                      <p className="text-gray-800 truncate">{scanPreview.paymentMethod}</p>
+                    </div>
+                  )}
+                </div>
+                {Array.isArray(scanPreview.items) && scanPreview.items.length > 0 && (
+                  <div>
+                    <p className="text-[10px] text-gray-500 uppercase font-semibold mb-1">Line items ({scanPreview.items.length})</p>
+                    <div className="max-h-32 overflow-y-auto divide-y divide-gray-100 border border-gray-100 rounded-lg">
+                      {scanPreview.items.map((it, i) => (
+                        <div key={i} className="flex items-center justify-between px-3 py-1.5 text-xs">
+                          <span className="text-gray-700 truncate flex-1">
+                            {it.qty ? <span className="text-gray-400 mr-1">{it.qty}×</span> : null}
+                            {it.description || '(unnamed)'}
+                          </span>
+                          {it.amount != null && <span className="text-gray-900 font-medium ml-2">{it.amount}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <p className="mt-2 text-[10px] text-gray-400">Auto-filled fields below — review and edit before saving.</p>
+              </div>
+            )}
           </div>
 
           {/* Compact Form Content */}
@@ -502,6 +621,25 @@ const AddExpense = () => {
                     <option key={category} value={category}>{category}</option>
                   ))}
                 </select>
+                {(loadingCategorySuggestion || (aiCategorySuggestion && aiCategorySuggestion.category !== formData.category)) && (
+                  <div className="mt-2">
+                    {loadingCategorySuggestion ? (
+                      <div className="inline-flex items-center gap-1.5 text-xs text-gray-500">
+                        <Loader2 className="h-3 w-3 animate-spin" /> AI is suggesting a category…
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setFormData(f => ({ ...f, category: aiCategorySuggestion.category }))}
+                        className="inline-flex items-center gap-1.5 text-xs bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-full px-3 py-1.5 transition-colors"
+                      >
+                        <Sparkles className="h-3 w-3" />
+                        Use suggested: <span className="font-bold">{aiCategorySuggestion.category}</span>
+                        <span className="text-[10px] opacity-60">({aiCategorySuggestion.source === 'history' ? 'from your history' : 'AI'})</span>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
               
               {/* Payment Method Field */}

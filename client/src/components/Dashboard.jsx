@@ -3,6 +3,8 @@ import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Toolti
 import { Wallet, TrendingUp, Target, AlertCircle, Brain, Sparkles, Loader2, Save, X, Calendar, Percent, BarChart3, ChevronDown, PieChart as PieChartIcon, FileText } from 'lucide-react';
 import ExpenseCard from './ExpenseCard';
 import BudgetProgress from './BudgetProgress';
+import ForecastWidget from './ForecastWidget';
+import AnomalyAlerts from './AnomalyAlerts';
 import { useAuth } from '../context/AuthContext';
 import { supabase } from '../lib/supabase';
 import { useCurrency } from '../context/CurrencyContext';
@@ -63,16 +65,10 @@ useEffect(() => {
           }];
         }
       });
-      setExtraIncomes(incomes);
     }
   };
   fetchExtraIncomes();
 }, [user]);
-  const [aiRecommendations] = useState([
-    "Consider reducing dining out expenses by 20% to save $90/month",
-    "Switch to a more fuel-efficient commute to save $40/month",
-    "Review subscription services - potential savings of $25/month"
-  ]);
   const [expenses, setExpenses] = useState([]);
   const [expensesLoading, setExpensesLoading] = useState(true);
   const [expensesError, setExpensesError] = useState(null);
@@ -453,6 +449,16 @@ useEffect(() => {
               <AlertCircle className="h-6 w-6 text-orange-600" />
             </div>
           </div>
+        </div>
+      </div>
+
+      {/* AI Insights — Forecast + Anomalies */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2">
+          <ForecastWidget />
+        </div>
+        <div>
+          <AnomalyAlerts />
         </div>
       </div>
 
